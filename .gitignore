@@ -1,2 +1,5 @@
 data/raw/
 __pycache__/
+# dados reais da loja: gerar com scripts/build_shopify.py (ver README)
+data/shopify/
+dashboard/data.js
