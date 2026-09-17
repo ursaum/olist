@@ -15,7 +15,7 @@ Clicar em um estado no mapa, numa região, num tipo, num produto ou numa linha d
 ## Publicação automática (GitHub Pages)
 
 O dashboard é publicado pelo GitHub Actions em `https://<usuario>.github.io/<repositorio>/`
-e atualizado todo dia às 6h (horário de Brasília), além de a cada push na `main`.
+e atualizado todo dia às 6h (horário de Brasília), além de a cada push no branch padrão.
 A cada execução o workflow:
 
 1. busca na Admin API da Shopify os pedidos dos últimos 58 dias (`scripts/fetch_shopify.py`) e
@@ -35,7 +35,7 @@ A cada execução o workflow:
 3. **Pages.** Em Settings → Pages, escolha *Source: GitHub Actions*.
 4. **Permissão de escrita.** Em Settings → Actions → General → Workflow permissions, marque
    *Read and write permissions* (o workflow grava o arquivo de pedidos acumulados).
-5. Faça o merge deste branch na `main` ou rode o workflow manualmente em Actions → *Atualizar e publicar dashboard*.
+5. Rode o workflow manualmente em Actions → *Atualizar e publicar dashboard* (ou faça um push no branch padrão).
 
 Sem os segredos o workflow ainda publica o dashboard, só com os dados já salvos no repositório.
 

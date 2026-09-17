@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: "0 9 * * *"        # todo dia às 06:00 (horário de Brasília)
   push:
-    branches: [main]
+    branches: [claude/loving-heisenberg-7fhdtl]
   workflow_dispatch:
 
 permissions:
@@ -53,6 +53,8 @@ jobs:
         run: python3 scripts/build_shopify.py --in 'data/shopify/*.json' --out dashboard
 
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
