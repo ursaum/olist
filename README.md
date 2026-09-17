@@ -22,7 +22,7 @@ A cada execução o workflow:
    acumula em `data/shopify/api-orders.json`, salvando o arquivo no repositório;
 2. gera `dashboard/data.js` a partir da base histórica (`data/shopify/sales-*.json`, extração
    ShopifyQL até 14/09/2026) mais os pedidos acumulados da API, que têm prioridade;
-3. publica a pasta `dashboard/` no GitHub Pages.
+3. envia a pasta `dashboard/` para o branch `gh-pages`, que o GitHub Pages publica.
 
 ### Configuração (uma vez)
 
@@ -32,7 +32,9 @@ A cada execução o workflow:
 2. **Segredos no GitHub.** Em Settings → Secrets and variables → Actions, crie:
    - `SHOPIFY_STORE_DOMAIN`: o domínio `.myshopify.com` da loja;
    - `SHOPIFY_ADMIN_TOKEN`: o token do passo 1.
-3. **Pages.** Em Settings → Pages, escolha *Source: GitHub Actions*.
+3. **Pages.** O GitHub costuma ativar o Pages sozinho quando o branch `gh-pages` é criado. Se o
+   link não abrir, vá em Settings → Pages e escolha *Source: Deploy from a branch*, branch
+   `gh-pages`, pasta `/ (root)`.
 4. **Permissão de escrita.** Em Settings → Actions → General → Workflow permissions, marque
    *Read and write permissions* (o workflow grava o arquivo de pedidos acumulados).
 5. Rode o workflow manualmente em Actions → *Atualizar e publicar dashboard* (ou faça um push no branch padrão).
@@ -82,6 +84,12 @@ SINCE 2026-01-01 UNTIL today LIMIT 5000
 
 Arquivos com `"priority": 2` (API) substituem, pedido a pedido, os de prioridade 1 (ShopifyQL);
 arquivos da mesma prioridade apenas se somam.
+
+A base histórica está em `data/shopify/sales-base-*.json`, dividida em blocos e gravada com
+`"encoding": "string-table"`: os textos das nove primeiras colunas ficam uma vez só na lista
+`strings`, e cada linha guarda o índice em vez do texto. Os números de pedido foram trocados por
+identificadores `o<N>`, e o endereço de cobrança só é gravado quando difere do de entrega.
+`scripts/build_shopify.py` lê esse formato e o formato original da ShopifyQL indistintamente.
 
 ## Definições
 
