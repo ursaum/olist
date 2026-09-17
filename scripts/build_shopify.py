@@ -45,6 +45,10 @@ def load(paths):
     files = []
     for p in paths:
         d = json.load(open(p, encoding="utf-8"))
+        if d.get("encoding") == "string-table":     # células de texto guardadas como índice em d["strings"]
+            table = d["strings"]
+            d["rows"] = [[table[v] if isinstance(v, int) and not isinstance(v, bool) and i < 9 else v
+                          for i, v in enumerate(r)] for r in d["rows"]]
         files.append((int(d.get("priority", 1)), p, d))
     files.sort(key=lambda f: (f[0], f[1]))
     rows, cols, level_rows, level = [], None, [], None
