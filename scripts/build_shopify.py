@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Gera dashboard/data.js a partir de extrações ShopifyQL da loja Shopify.
 
-Cada arquivo de entrada é o JSON devolvido pela consulta abaixo (uma por período),
-salvo como está: {"columns": [{"name": ...}], "rows": [[...], ...]}
+Entradas: os JSONs da consulta ShopifyQL abaixo (base histórica, uma por período) e o
+arquivo acumulado por scripts/fetch_shopify.py (prioridade maior, substitui pedido a pedido).
+Formato: {"columns": [{"name": ...}], "rows": [[...], ...], "priority": 1|2}
 
     FROM sales
     SHOW orders, quantity_ordered, net_items_sold, gross_sales, discounts, returns,
@@ -39,16 +40,34 @@ CHANNEL_LABELS = {
 
 
 def load(paths):
-    rows, cols = [], None
+    """Carrega as extrações. Arquivos com "priority" maior (ex.: busca na API)
+    substituem, pedido a pedido, as linhas vindas de arquivos de prioridade menor."""
+    files = []
     for p in paths:
         d = json.load(open(p, encoding="utf-8"))
+        files.append((int(d.get("priority", 1)), p, d))
+    files.sort(key=lambda f: (f[0], f[1]))
+    rows, cols, level_rows, level = [], None, [], None
+    for prio, p, d in files:
         c = [x["name"] for x in d["columns"]]
         if cols is None:
             cols = c
         elif c != cols:
             raise SystemExit(f"colunas diferentes em {p}: {c} vs {cols}")
-        rows.extend(d["rows"])
-    return cols, rows
+        if prio != level:                      # fecha o nível anterior
+            rows, level_rows, level = _merge_level(cols, rows, level_rows), [], prio
+        level_rows.extend(d["rows"])
+    return cols, _merge_level(cols, rows, level_rows)
+
+
+def _merge_level(cols, rows, level_rows):
+    """Linhas de um nível de prioridade substituem, pedido a pedido, as dos níveis anteriores.
+    Dentro do mesmo nível os arquivos apenas se somam (períodos diferentes da mesma extração)."""
+    if not level_rows:
+        return rows
+    oi = cols.index("order_name")
+    ids = {r[oi] for r in level_rows}
+    return [r for r in rows if r[oi] not in ids] + level_rows
 
 
 def main():
