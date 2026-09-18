@@ -1,3 +1,7 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mapa de Vendas Strut</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@87.5,500;87.5,600;87.5,700;100,500;100,600;100,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -289,9 +293,43 @@ footer p { margin: 4px 0; }
   .region { grid-template-columns: 92px 1fr 84px 44px; }
 }
 @media (max-width: 560px) {
-  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .field select, .field input[type="date"] { min-width: 120px; }
+  body { font-size: 15px; padding-block: 14px 40px; }
+  h1 { font-size: 24px; }
+  .top { gap: 8px; margin-bottom: 14px; }
+  .top .sub { font-size: 14px; }
   .top .meta { text-align: left; }
+  .filters { padding: 12px; gap: 10px; }
+  .field { flex: 1 1 calc(50% - 5px); }
+  .field select, .field input[type="date"] { min-width: 0; width: 100%; height: 40px; font-size: 15px; }
+  .field:has(.presets), .field:has(.dates) { flex-basis: 100%; }
+  .presets { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .presets::-webkit-scrollbar { display: none; }
+  .presets button { height: 38px; padding: 0 14px; font-size: 14px; }
+  .dates input[type="date"] { flex: 1; }
+  .clear { flex-basis: 100%; margin-left: 0; text-align: left; padding: 0; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .kpi { padding: 12px 12px 10px; }
+  .kpi-value { font-size: clamp(18px, 5.6vw, 26px); }
+  .card { padding: 14px 12px 12px; }
+  .card-head .search { width: 100%; }
+  .state-label { font-size: 17px; stroke-width: 3.5px; }
+  .region { grid-template-columns: 104px 1fr 74px 38px; gap: 8px; }
+  .region .name { white-space: normal; line-height: 1.2; font-size: 14px; }
+  .kpi-sub { white-space: normal; }
+  #prods-table td.clip { white-space: normal; max-width: none; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .chart text { font-size: 12px; }
+  .chart .cat-label { font-size: 13px; }
+  .chart .dlabel { font-size: 12px; }
+  .tooltip { font-size: 13px; max-width: 260px; }
+  th, td { padding: 9px 8px; }
+  td.clip { max-width: 170px; }
+  #cities-table th:nth-child(3), #cities-table td:nth-child(3),
+  #cities-table th:nth-child(5), #cities-table td:nth-child(5),
+  #prods-table th:nth-child(2), #prods-table td:nth-child(2),
+  #prods-table th:nth-child(3), #prods-table td:nth-child(3),
+  #prods-table th:nth-child(6), #prods-table td:nth-child(6) { display: none; }
+  .table-foot { flex-wrap: wrap; }
+  footer { font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) { .state { transition: none; } }
 </style>
@@ -719,7 +757,7 @@ footer p { margin: 4px 0; }
     const months = []; for (let m = m0; m <= m1; m++) months.push({ m, ...(A.byMonth.get(m) || { rev: 0, orders: 0, items: 0 }) });
     $('trend-title').textContent = 'Receita por mês · ' + scopeLabel();
     $('trend-hint').textContent = months.length + (months.length === 1 ? ' mês' : ' meses');
-    const W = 720, H = 240, padL = 56, padR = 12, padT = 16, padB = 30;
+    const W = chartWidth(host), narrow = W < 560, H = narrow ? 200 : 240, padL = narrow ? 44 : 56, padR = 12, padT = 16, padB = 30;
     const iw = W - padL - padR, ih = H - padT - padB;
     const max = Math.max(...months.map(x => x.rev), 1);
     const ticks = niceTicks(max, 4);
@@ -731,12 +769,12 @@ footer p { margin: 4px 0; }
       const lab = svgEl('text', { x: padL - 8, y: y(t) + 3.5, 'text-anchor': 'end' }); lab.textContent = axisLabel(t); svg.appendChild(lab);
     }
     const n = months.length, slot = iw / n, bw = Math.max(2, Math.min(28, slot - 2));
-    const labelEvery = n > 30 ? 6 : n > 18 ? 3 : n > 9 ? 2 : 1;
+    const labelEvery = Math.max(1, Math.ceil(n * (narrow ? 58 : 64) / iw));
     months.forEach((mo, i) => {
       const x = padL + i * slot + (slot - bw) / 2;
       const h = ih - (y(mo.rev) - padT);
       svg.appendChild(svgEl('rect', { x, y: y(mo.rev), width: bw, height: Math.max(0, h), rx: Math.min(4, bw / 2), class: 'bar' }));
-      if (i % labelEvery === 0 || n <= 12) {
+      if (i % labelEvery === 0) {
         const dt = new Date(Math.floor(mo.m / 12), mo.m % 12, 1);
         const lab = svgEl('text', { x: x + bw / 2, y: H - padB + 16, 'text-anchor': 'middle' }); lab.textContent = fmtMonth.format(dt).replace('.', ''); svg.appendChild(lab);
       }
@@ -790,7 +828,8 @@ footer p { margin: 4px 0; }
     let list = [...A.byProduct.entries()].map(([k, v]) => ({ k, ...v })).sort((a, b) => b.rev - a.rev).slice(0, 12);
     if (F.product >= 0 && !list.some(x => x.k === F.product) && A.byProduct.get(F.product)) list.push({ k: F.product, ...A.byProduct.get(F.product) });
     if (!list.length) { host.insertBefore(el('div', 'empty', 'Sem vendas neste recorte.'), tip); return; }
-    const W = 720, rowH = 26, padL = 270, padR = 110, padT = 4;
+    const W = chartWidth(host), narrow = W < 560;
+    const rowH = narrow ? 42 : 26, padL = narrow ? 0 : 270, padR = narrow ? 112 : 110, padT = 4;
     const H = padT + list.length * rowH + 4, iw = W - padL - padR;
     const max = Math.max(...list.map(x => x.rev), 1);
     const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Receita por produto' });
@@ -798,10 +837,16 @@ footer p { margin: 4px 0; }
       const y = padT + i * rowH;
       const g = svgEl('g', { class: 'hrow' + (F.product === c.k ? ' selected' : ''), tabindex: '0', role: 'button' });
       g.appendChild(svgEl('rect', { x: 0, y, width: W, height: rowH, fill: 'transparent' }));
-      const lab = svgEl('text', { x: padL - 10, y: y + rowH / 2 + 4, 'text-anchor': 'end', class: 'cat-label' }); lab.textContent = truncate(D.products[c.k], 42); g.appendChild(lab);
       const w = Math.max(2, Math.max(0, c.rev) / max * iw);
-      g.appendChild(svgEl('rect', { x: padL, y: y + 5, width: w, height: rowH - 10, rx: 4, class: 'hbar' }));
-      const v = svgEl('text', { x: padL + w + 8, y: y + rowH / 2 + 4, class: 'dlabel' }); v.textContent = compact(c.rev) + (total ? ' · ' + fmtPct.format(c.rev / total) : ''); g.appendChild(v);
+      if (narrow) {          // celular: nome em cima, barra embaixo
+        const lab = svgEl('text', { x: 0, y: y + 14, class: 'cat-label' }); lab.textContent = truncate(D.products[c.k], Math.floor(W / 7.2)); g.appendChild(lab);
+        g.appendChild(svgEl('rect', { x: 0, y: y + 22, width: w, height: 12, rx: 4, class: 'hbar' }));
+        const v = svgEl('text', { x: w + 8, y: y + 32, class: 'dlabel' }); v.textContent = compact(c.rev) + (total ? ' · ' + fmtPct.format(c.rev / total) : ''); g.appendChild(v);
+      } else {
+        const lab = svgEl('text', { x: padL - 10, y: y + rowH / 2 + 4, 'text-anchor': 'end', class: 'cat-label' }); lab.textContent = truncate(D.products[c.k], 42); g.appendChild(lab);
+        g.appendChild(svgEl('rect', { x: padL, y: y + 5, width: w, height: rowH - 10, rx: 4, class: 'hbar' }));
+        const v = svgEl('text', { x: padL + w + 8, y: y + rowH / 2 + 4, class: 'dlabel' }); v.textContent = compact(c.rev) + (total ? ' · ' + fmtPct.format(c.rev / total) : ''); g.appendChild(v);
+      }
       const toggle = () => { if (F.product === c.k) F.product = -1; else { F.product = c.k; F.type = PRODUCT_TYPE[c.k]; } update(); };
       g.addEventListener('click', toggle);
       g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
@@ -867,6 +912,16 @@ footer p { margin: 4px 0; }
     const textual = s.key === 'name' || s.key === 'type';
     rows.sort((a, b) => textual ? dir * a[s.key].localeCompare(b[s.key], 'pt-BR') : (dir * (a[s.key] - b[s.key])) || a.name.localeCompare(b.name, 'pt-BR'));
   }
+
+  function chartWidth(host) {
+    const w = Math.round(host.getBoundingClientRect().width);
+    return w > 0 ? Math.max(280, w) : 720;
+  }
+  let lastW = innerWidth, resizeTimer = 0;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { if (innerWidth !== lastW) { lastW = innerWidth; renderTrend(); renderProductChart(); } }, 150);
+  });
 
   // ---------- boot ----------
   buildControls();
