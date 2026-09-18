@@ -177,7 +177,7 @@ button, select, input { font: inherit; color: inherit; }
 
 /* ---------- KPIs ---------- */
 .kpis {
-  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px;
 }
 .kpi {
   background: var(--surface); border: 1px solid var(--hairline); border-radius: 10px; padding: 12px 14px 10px;
@@ -282,7 +282,7 @@ footer { margin-top: 24px; color: var(--muted); font-size: 12px; max-width: 80ch
 footer p { margin: 4px 0; }
 
 @media (max-width: 1100px) {
-  .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 900px) {
   .grid, .grid-2 { grid-template-columns: minmax(0, 1fr); }
@@ -432,7 +432,8 @@ footer p { margin: 4px 0; }
   for (let y = LAST_DATE.getFullYear(); y >= EPOCH.getFullYear() && PRESETS.length < 4; y--) {
     PRESETS.push([String(y), String(y), () => [Math.max(0, dateToDay(new Date(y, 0, 1))), Math.min(LAST, dateToDay(new Date(y, 11, 31)))]]);
   }
-  PRESETS.push(['12m', 'Últimos 12 meses', () => [LAST - 364, LAST]], ['90d', 'Últimos 90 dias', () => [LAST - 89, LAST]], ['30d', 'Últimos 30 dias', () => [LAST - 29, LAST]]);
+  PRESETS.push(['mes', 'Mês atual', () => [Math.max(0, dateToDay(new Date(LAST_DATE.getFullYear(), LAST_DATE.getMonth(), 1))), LAST]],
+    ['12m', 'Últimos 12 meses', () => [LAST - 364, LAST]], ['90d', 'Últimos 90 dias', () => [LAST - 89, LAST]], ['30d', 'Últimos 30 dias', () => [LAST - 29, LAST]]);
 
   const $ = id => document.getElementById(id);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -597,8 +598,6 @@ footer p { margin: 4px 0; }
       ['Receita líquida', fmtBRL.format(t.rev), 'bruta ' + fmtBRL.format(t.gross)],
       ['Pedidos', fmtInt.format(t.orders), fmtInt.format(t.items) + ' itens'],
       ['Ticket médio', t.orders ? fmtBRL2.format(t.rev / t.orders) : '—', 'por pedido'],
-      ['Descontos', fmtBRL.format(t.disc), t.gross ? fmtPct.format(t.disc / t.gross) + ' da receita bruta' : ''],
-      ['Devoluções', fmtBRL.format(t.ret), t.gross ? fmtPct.format(t.ret / t.gross) + ' da receita bruta' : ''],
       ['Cidades atendidas', fmtInt.format(cities), states + (states === 1 ? ' estado' : ' estados') + ' · frete ' + fmtBRL.format(t.ship)],
     ];
     const k = $('kpis'); k.replaceChildren();
