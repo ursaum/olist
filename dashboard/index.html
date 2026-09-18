@@ -316,7 +316,8 @@ footer p { margin: 4px 0; }
   .region { grid-template-columns: 104px 1fr 74px 38px; gap: 8px; }
   .region .name { white-space: normal; line-height: 1.2; font-size: 14px; }
   .kpi-sub { white-space: normal; }
-  #prods-table td.clip { white-space: normal; max-width: none; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  #prods-table td.clip { white-space: normal; max-width: none; line-height: 1.25; }
+  #prods-table td.clip .clip-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .chart text { font-size: 12px; }
   .chart .cat-label { font-size: 13px; }
   .chart .dlabel { font-size: 12px; }
@@ -895,7 +896,7 @@ footer p { margin: 4px 0; }
     const maxShare = Math.max(...rows.map(r => r.share), 0.0001);
     for (const r of rows.slice(0, prodLimit)) {
       const tr = el('tr'); tr.className = F.product === r.k ? 'selected' : '';
-      const nameTd = cell(r.name, false); nameTd.className = 'clip'; nameTd.title = r.name;
+      const nameTd = cell('', false); nameTd.className = 'clip'; nameTd.title = r.name; nameTd.appendChild(el('span', 'clip-text', r.name));
       tr.append(nameTd, cell(r.type, false), cell(fmtInt.format(r.items)), cell(fmtInt.format(r.orders)), cell(fmtBRL.format(r.revenue)));
       const td = el('td', 'n'); const bar = el('span', 'share'); const fill = el('i'); fill.style.width = Math.max(0, r.share / maxShare * 100) + '%'; bar.appendChild(fill); td.append(bar, fmtPct.format(r.share)); tr.appendChild(td);
       tr.addEventListener('click', () => { if (F.product === r.k) F.product = -1; else { F.product = r.k; F.type = PRODUCT_TYPE[r.k]; } update(); });
