@@ -29,7 +29,10 @@ jobs:
         with:
           python-version: "3.12"
 
+      # As buscas nas APIs rodam só no agendamento diário e na execução manual;
+      # um push de código republica com os dados já salvos, em segundos.
       - name: Buscar pedidos recentes na Shopify
+        if: github.event_name != 'push'
         env:
           SHOPIFY_STORE_DOMAIN: ${{ secrets.SHOPIFY_STORE_DOMAIN }}
           SHOPIFY_ADMIN_TOKEN: ${{ secrets.SHOPIFY_ADMIN_TOKEN }}
@@ -41,6 +44,7 @@ jobs:
           python3 scripts/fetch_shopify.py --out data/shopify/api-orders.json
 
       - name: Buscar pedidos do Mercado Livre no Olist Tiny
+        if: github.event_name != 'push'
         env:
           OLIST_TINY_TOKEN: ${{ secrets.OLIST_TINY_TOKEN }}
           OLIST_CHANNELS: ${{ vars.OLIST_CHANNELS }}
