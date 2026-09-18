@@ -27,6 +27,9 @@ from datetime import date, datetime
 
 from build_data import REGIONS, STATE_NAMES, STATE_ORDER, STATE_REGION, title_city
 
+COLUMNS = ["day", "order_name", "shipping_region", "shipping_city", "billing_region", "billing_city",
+           "sales_channel", "product_type", "product_title", "net_items_sold", "gross_sales",
+           "discounts", "returns", "net_sales", "shipping_charges"]   # colunas usadas pelo dashboard
 NAME_TO_UF = {name: uf for uf, name in STATE_NAMES.items()}
 NAME_TO_UF.update({uf: uf for uf in STATE_NAMES})
 CHANNEL_LABELS = {
@@ -55,17 +58,19 @@ def load(paths):
                           for i, v in enumerate(r)] for r in d["rows"]]
         files.append((int(d.get("priority", 1)), p, d))
     files.sort(key=lambda f: (f[0], f[1]))
-    rows, cols, level_files, level = [], None, [], None
+    rows, level_files, level = [], [], None
     for prio, p, d in files:
         c = [x["name"] for x in d["columns"]]
-        if cols is None:
-            cols = c
-        elif c != cols:
-            raise SystemExit(f"colunas diferentes em {p}: {c} vs {cols}")
+        missing = [x for x in COLUMNS if x not in c]
+        if missing:
+            raise SystemExit(f"colunas ausentes em {p}: {missing}")
+        if c != COLUMNS:                       # projeta nas colunas comuns (a Admin API traz colunas a mais)
+            idx = [c.index(x) for x in COLUMNS]
+            d["rows"] = [[r[i] for i in idx] for r in d["rows"]]
         if prio != level:                      # fecha o nível anterior
-            rows, level_files, level = _merge_level(cols, rows, level_files), [], prio
+            rows, level_files, level = _merge_level(COLUMNS, rows, level_files), [], prio
         level_files.append(d)
-    return cols, _merge_level(cols, rows, level_files)
+    return COLUMNS, _merge_level(COLUMNS, rows, level_files)
 
 
 def _merge_level(cols, rows, level_files):

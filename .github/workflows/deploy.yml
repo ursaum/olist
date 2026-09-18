@@ -6,6 +6,11 @@ on:
   push:
     branches: [claude/loving-heisenberg-7fhdtl]
   workflow_dispatch:
+    inputs:
+      olist_since:
+        description: "Buscar pedidos do Olist desde (AAAA-MM-DD); vazio = últimos 60 dias"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -35,20 +40,38 @@ jobs:
           fi
           python3 scripts/fetch_shopify.py --out data/shopify/api-orders.json
 
+      - name: Buscar pedidos do Mercado Livre no Olist Tiny
+        env:
+          OLIST_TINY_TOKEN: ${{ secrets.OLIST_TINY_TOKEN }}
+          OLIST_CHANNELS: ${{ vars.OLIST_CHANNELS }}
+          OLIST_SINCE: ${{ inputs.olist_since }}
+        run: |
+          if [ -z "$OLIST_TINY_TOKEN" ]; then
+            echo "Segredo OLIST_TINY_TOKEN não configurado; pulando o Olist."
+            exit 0
+          fi
+          if [ -n "$OLIST_SINCE" ]; then
+            python3 scripts/fetch_olist.py --since "$OLIST_SINCE" --out data/olist/orders.json
+          else
+            python3 scripts/fetch_olist.py --out data/olist/orders.json
+          fi
+
       - name: Salvar pedidos acumulados no repositório
         run: |
-          if git diff --quiet -- data/shopify/api-orders.json && ! git ls-files --others --exclude-standard | grep -q '^data/shopify/api-orders.json$'; then
+          for f in data/shopify/api-orders.json data/olist/orders.json; do
+            [ -e "$f" ] && git add "$f"
+          done
+          if git diff --cached --quiet; then
             echo "Sem pedidos novos."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/shopify/api-orders.json
-          git commit -m "Atualiza pedidos da Shopify ($(date -u +%Y-%m-%d))"
+          git commit -m "Atualiza pedidos das APIs ($(date -u +%Y-%m-%d))"
           git push
 
       - name: Gerar dados do dashboard
-        run: python3 scripts/build_shopify.py --in 'data/shopify/*.json' --out dashboard
+        run: python3 scripts/build_shopify.py --in 'data/shopify/*.json' 'data/olist/*.json' --out dashboard
 
       - name: Publicar no GitHub Pages (branch gh-pages)
         env:

@@ -33,6 +33,35 @@ estornos lançados dentro da janela (mês atual + anterior) entram automaticamen
 pedidos mais antigos que isso só entram se o mês do estorno for reextraído à mão (peça ao Claude:
 "reextraia julho de 2026 para o dashboard").
 
+### Mercado Livre (via Olist Tiny)
+
+Os pedidos do Mercado Livre entram pelo Olist Tiny, que centraliza os marketplaces. A cada
+execução o workflow roda `scripts/fetch_olist.py`: busca na API v2 do Tiny os pedidos dos últimos
+60 dias, guarda só os do canal Mercado Livre (os da Shopify já vêm da própria Shopify) e acumula
+em `data/olist/orders.json`, substituindo pedido a pedido o que já estava salvo (cancelamentos
+aparecem). No dashboard eles ficam no canal "Mercado Livre".
+
+Configuração (uma vez):
+
+1. No Olist Tiny, gere um token de API (Configurações → Geral → Token API; o nome do menu varia
+   com a versão do painel).
+2. No GitHub, em Settings → Secrets and variables → Actions, crie o segredo `OLIST_TINY_TOKEN`
+   com esse token.
+3. Para carregar o histórico, rode o workflow à mão em Actions → *Atualizar e publicar dashboard*
+   → *Run workflow*, preenchendo *olist_since* com a data inicial (ex.: `2024-01-01`). A API do
+   Tiny aceita cerca de 30 requisições por minuto e cada pedido é uma requisição, então mil
+   pedidos levam uns 35 minutos.
+4. Opcional: a variável `OLIST_CHANNELS` (Settings → Secrets and variables → Actions → Variables)
+   muda os canais incluídos, por trecho do nome e separados por vírgula, ex.: `mercado livre,
+   shopee`. Use `manual` para incluir também vendas lançadas direto no Tiny, sem canal.
+
+Critério de valores, o mesmo da Shopify: receita bruta = itens × preço, desconto do pedido
+distribuído entre os itens, frete à parte, pedido cancelado com devolução igual à receita.
+Comissões do marketplace não são descontadas, para os canais ficarem comparáveis. O tipo de
+produto vem do início do título (ex.: "Bota …"), como nos produtos da Shopify sem tipo.
+
+### Shopify pela Admin API (alternativa à rotina)
+
 Se preferir não depender da rotina, o workflow também aceita um token da Admin API da Shopify:
 crie um app na loja (escopos `read_orders` e `read_products`) e cadastre os segredos
 `SHOPIFY_STORE_DOMAIN` e `SHOPIFY_ADMIN_TOKEN` em Settings → Secrets and variables → Actions.
@@ -61,6 +90,8 @@ dashboard/data.js           dados agregados (gerado no deploy, não versionado)
 data/shopify/sales-base-*.json base histórica (ShopifyQL até 14/09/2026), em blocos
 data/shopify/sales-AAAA-MM.json meses reextraídos pela rotina diária (substituem a base no mês)
 data/shopify/api-orders.json pedidos recentes acumulados pela Admin API (gravado pelo workflow)
+data/olist/orders.json      pedidos do Mercado Livre vindos do Olist Tiny (gravado pelo workflow)
+scripts/fetch_olist.py      busca no Olist Tiny os pedidos de marketplace e acumula em data/olist/orders.json
 scripts/fetch_shopify.py    busca pedidos na Admin API e acumula em api-orders.json
 scripts/build_shopify.py    gera dashboard/data.js a partir das extrações
 scripts/shopifyql_to_base.py converte o resultado ShopifyQL de um mês em data/shopify/sales-AAAA-MM.json
@@ -75,7 +106,7 @@ scripts/download_raw.sh     baixa o dataset público da Olist e o GeoJSON dos es
 export SHOPIFY_STORE_DOMAIN=minha-loja.myshopify.com
 export SHOPIFY_ADMIN_TOKEN=...
 python3 scripts/fetch_shopify.py                                   # pedidos recentes -> data/shopify/api-orders.json
-python3 scripts/build_shopify.py --in 'data/shopify/*.json' --out dashboard
+python3 scripts/build_shopify.py --in 'data/shopify/*.json' 'data/olist/*.json' --out dashboard
 ```
 
 Para refazer a base histórica, rode a consulta ShopifyQL abaixo no Shopify Analytics por período
@@ -91,7 +122,8 @@ SINCE 2026-01-01 UNTIL today LIMIT 5000
 ```
 
 Arquivos com `"priority": 2` (API) substituem, pedido a pedido, os de prioridade 1 (ShopifyQL);
-arquivos da mesma prioridade apenas se somam.
+arquivos da mesma prioridade apenas se somam. Colunas a mais (ex.: `orders`, `quantity_ordered`)
+são ignoradas; as quinze usadas pelo dashboard precisam existir em todos.
 
 A base histórica está em `data/shopify/sales-base-*.json`, dividida em blocos e gravada com
 `"encoding": "string-table"`: os textos das nove primeiras colunas ficam uma vez só na lista
