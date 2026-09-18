@@ -24,6 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # histórico completo para o rebase do commit de dados
 
       - uses: actions/setup-python@v5
         with:
@@ -72,7 +74,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Atualiza pedidos das APIs ($(date -u +%Y-%m-%d))"
-          git push
+          # outro push pode ter chegado durante a busca (que leva minutos): rebase e tenta de novo
+          n=0
+          until git pull --rebase origin "$GITHUB_REF_NAME" && git push; do
+            n=$((n+1)); [ "$n" -ge 3 ] && exit 1
+            sleep 20
+          done
 
       - name: Gerar dados do dashboard
         run: python3 scripts/build_shopify.py --in 'data/shopify/*.json' 'data/olist/*.json' --out dashboard
