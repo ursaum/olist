@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Gera dashboard/data.js a partir de extrações ShopifyQL da loja Shopify.
 
-Entradas: os JSONs da consulta ShopifyQL abaixo (base histórica, uma por período) e o
-arquivo acumulado por scripts/fetch_shopify.py (prioridade maior, substitui pedido a pedido).
-Formato: {"columns": [{"name": ...}], "rows": [[...], ...], "priority": 1|2}
+Entradas: a base histórica (data/shopify/sales-base-*.json, ShopifyQL até 14/09/2026), os
+arquivos mensais gerados por scripts/shopifyql_to_base.py (prioridade 2, substituem os dias
+que cobrem) e o arquivo acumulado por scripts/fetch_shopify.py (prioridade 2, substitui
+pedido a pedido).
+Formato: {"columns": [{"name": ...}], "rows": [[...], ...], "priority": 1|2,
+          "replaces_days": {"since": "AAAA-MM-DD", "until": "AAAA-MM-DD"}  (opcional)}
 
     FROM sales
     SHOW orders, quantity_ordered, net_items_sold, gross_sales, discounts, returns,
@@ -40,8 +43,9 @@ CHANNEL_LABELS = {
 
 
 def load(paths):
-    """Carrega as extrações. Arquivos com "priority" maior (ex.: busca na API)
-    substituem, pedido a pedido, as linhas vindas de arquivos de prioridade menor."""
+    """Carrega as extrações. Arquivos com "priority" maior (ex.: atualização mensal) substituem
+    as linhas vindas de arquivos de prioridade menor: pedido a pedido e, se o arquivo declarar
+    "replaces_days": {"since": ..., "until": ...}, todos os dias desse intervalo."""
     files = []
     for p in paths:
         d = json.load(open(p, encoding="utf-8"))
@@ -51,7 +55,7 @@ def load(paths):
                           for i, v in enumerate(r)] for r in d["rows"]]
         files.append((int(d.get("priority", 1)), p, d))
     files.sort(key=lambda f: (f[0], f[1]))
-    rows, cols, level_rows, level = [], None, [], None
+    rows, cols, level_files, level = [], None, [], None
     for prio, p, d in files:
         c = [x["name"] for x in d["columns"]]
         if cols is None:
@@ -59,19 +63,28 @@ def load(paths):
         elif c != cols:
             raise SystemExit(f"colunas diferentes em {p}: {c} vs {cols}")
         if prio != level:                      # fecha o nível anterior
-            rows, level_rows, level = _merge_level(cols, rows, level_rows), [], prio
-        level_rows.extend(d["rows"])
-    return cols, _merge_level(cols, rows, level_rows)
+            rows, level_files, level = _merge_level(cols, rows, level_files), [], prio
+        level_files.append(d)
+    return cols, _merge_level(cols, rows, level_files)
 
 
-def _merge_level(cols, rows, level_rows):
-    """Linhas de um nível de prioridade substituem, pedido a pedido, as dos níveis anteriores.
-    Dentro do mesmo nível os arquivos apenas se somam (períodos diferentes da mesma extração)."""
-    if not level_rows:
+def _merge_level(cols, rows, level_files):
+    """Linhas de um nível de prioridade substituem as dos níveis anteriores: os mesmos pedidos
+    e os dias cobertos por "replaces_days". Dentro do mesmo nível os arquivos apenas se somam
+    (períodos diferentes da mesma extração)."""
+    if not level_files:
         return rows
-    oi = cols.index("order_name")
-    ids = {r[oi] for r in level_rows}
-    return [r for r in rows if r[oi] not in ids] + level_rows
+    oi, di = cols.index("order_name"), cols.index("day")
+    ids, windows, level_rows = set(), [], []
+    for d in level_files:
+        ids.update(r[oi] for r in d["rows"])
+        w = d.get("replaces_days")
+        if w:
+            windows.append((w["since"], w["until"]))
+        level_rows.extend(d["rows"])
+    def replaced(r):
+        return r[oi] in ids or any(a <= r[di] <= b for a, b in windows)
+    return [r for r in rows if not replaced(r)] + level_rows
 
 
 def main():

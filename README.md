@@ -14,32 +14,38 @@ Clicar em um estado no mapa, numa região, num tipo, num produto ou numa linha d
 
 ## Publicação automática (GitHub Pages)
 
-O dashboard é publicado pelo GitHub Actions em `https://<usuario>.github.io/<repositorio>/`
-e atualizado todo dia às 6h (horário de Brasília), além de a cada push no branch padrão.
-A cada execução o workflow:
+O dashboard fica em `https://<usuario>.github.io/<repositorio>/` e é republicado pelo GitHub
+Actions a cada push no branch padrão e todo dia às 6h (horário de Brasília). O workflow gera
+`dashboard/data.js` a partir dos arquivos em `data/shopify/` e envia a pasta `dashboard/` para o
+branch `gh-pages`, que o GitHub Pages publica.
 
-1. busca na Admin API da Shopify os pedidos dos últimos 58 dias (`scripts/fetch_shopify.py`) e
-   acumula em `data/shopify/api-orders.json`, salvando o arquivo no repositório;
-2. gera `dashboard/data.js` a partir da base histórica (`data/shopify/sales-*.json`, extração
-   ShopifyQL até 14/09/2026) mais os pedidos acumulados da API, que têm prioridade;
-3. envia a pasta `dashboard/` para o branch `gh-pages`, que o GitHub Pages publica.
+### Atualização diária dos dados
+
+Uma rotina agendada do Claude (Routine) roda todo dia de madrugada e, pelo conector Shopify da
+conta, reextrai o mês corrente e o mês anterior com a consulta ShopifyQL abaixo, converte cada
+resultado com `scripts/shopifyql_to_base.py` em `data/shopify/sales-AAAA-MM.json` e envia os
+arquivos ao repositório. Esse push dispara o workflow, que republica o dashboard.
+
+Cada arquivo mensal tem prioridade 2 e declara `"replaces_days"` com o mês inteiro: ao gerar o
+dashboard, as linhas daquele mês vindas da base histórica (prioridade 1) são descartadas e
+substituídas. Por isso um mês pode ser reextraído quantas vezes for preciso sem duplicar nada, e
+estornos lançados dentro da janela (mês atual + anterior) entram automaticamente. Estornos de
+pedidos mais antigos que isso só entram se o mês do estorno for reextraído à mão (peça ao Claude:
+"reextraia julho de 2026 para o dashboard").
+
+Se preferir não depender da rotina, o workflow também aceita um token da Admin API da Shopify:
+crie um app na loja (escopos `read_orders` e `read_products`) e cadastre os segredos
+`SHOPIFY_STORE_DOMAIN` e `SHOPIFY_ADMIN_TOKEN` em Settings → Secrets and variables → Actions.
+Com eles, `scripts/fetch_shopify.py` acumula os pedidos dos últimos 58 dias em
+`data/shopify/api-orders.json` a cada execução.
 
 ### Configuração (uma vez)
 
-1. **Token da Shopify.** No admin da loja crie um app (Configurações → Apps e canais de vendas →
-   Desenvolver apps, ou pelo Dev Dashboard) com os escopos `read_orders` e `read_products`,
-   instale-o na loja e copie o token de acesso da Admin API.
-2. **Segredos no GitHub.** Em Settings → Secrets and variables → Actions, crie:
-   - `SHOPIFY_STORE_DOMAIN`: o domínio `.myshopify.com` da loja;
-   - `SHOPIFY_ADMIN_TOKEN`: o token do passo 1.
-3. **Pages.** O GitHub costuma ativar o Pages sozinho quando o branch `gh-pages` é criado. Se o
-   link não abrir, vá em Settings → Pages e escolha *Source: Deploy from a branch*, branch
-   `gh-pages`, pasta `/ (root)`.
-4. **Permissão de escrita.** Em Settings → Actions → General → Workflow permissions, marque
-   *Read and write permissions* (o workflow grava o arquivo de pedidos acumulados).
-5. Rode o workflow manualmente em Actions → *Atualizar e publicar dashboard* (ou faça um push no branch padrão).
-
-Sem os segredos o workflow ainda publica o dashboard, só com os dados já salvos no repositório.
+1. **Pages.** Em Settings → Pages, escolha *Source: Deploy from a branch*, branch `gh-pages`,
+   pasta `/ (root)`. O GitHub não cria o site sozinho: o token do Actions não tem permissão
+   para isso.
+2. **Permissão de escrita.** Em Settings → Actions → General → Workflow permissions, marque
+   *Read and write permissions* (o workflow grava o branch `gh-pages`).
 
 > **Atenção:** uma página do GitHub Pages é pública para quem tiver o link, sem senha. O que fica
 > visível é o que o dashboard mostra: receita por dia, cidade, produto e canal. Os números de pedido
@@ -52,10 +58,12 @@ Sem os segredos o workflow ainda publica o dashboard, só com os dados já salvo
 dashboard/index.html        página do dashboard (abre direto no navegador)
 dashboard/br-map.js         paths SVG dos 27 estados (gerado)
 dashboard/data.js           dados agregados (gerado no deploy, não versionado)
-data/shopify/sales-*.json   base histórica: extrações ShopifyQL, uma por período
+data/shopify/sales-base-*.json base histórica (ShopifyQL até 14/09/2026), em blocos
+data/shopify/sales-AAAA-MM.json meses reextraídos pela rotina diária (substituem a base no mês)
 data/shopify/api-orders.json pedidos recentes acumulados pela Admin API (gravado pelo workflow)
 scripts/fetch_shopify.py    busca pedidos na Admin API e acumula em api-orders.json
 scripts/build_shopify.py    gera dashboard/data.js a partir das extrações
+scripts/shopifyql_to_base.py converte o resultado ShopifyQL de um mês em data/shopify/sales-AAAA-MM.json
 scripts/build_data.py       constantes (estados, regiões), gerador do mapa e do dataset de demonstração (Olist)
 scripts/download_raw.sh     baixa o dataset público da Olist e o GeoJSON dos estados (só para a demonstração / mapa)
 .github/workflows/deploy.yml atualização diária e publicação no GitHub Pages
