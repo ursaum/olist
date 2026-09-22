@@ -34,6 +34,8 @@
   --seq-8: #0d366b;
   --bar: #256abf;
   --bar-hover: #3987e5;
+  --bar-2: #b7c6d8;
+  --bar-2-hover: #9fb3cb;
   --tooltip-bg: #101b17;
   --tooltip-ink: #f3f6f4;
   --focus: #1f5fb3;
@@ -68,6 +70,8 @@
     --seq-8: #b6d3f8;
     --bar: #3f8ae0;
     --bar-hover: #63a2ec;
+    --bar-2: #3a4d63;
+    --bar-2-hover: #4a6180;
     --tooltip-bg: #f1f4f2;
     --tooltip-ink: #101b17;
     --focus: #8dbbf2;
@@ -102,6 +106,8 @@
   --seq-8: #b6d3f8;
   --bar: #3f8ae0;
   --bar-hover: #63a2ec;
+  --bar-2: #3a4d63;
+  --bar-2-hover: #4a6180;
   --tooltip-bg: #f1f4f2;
   --tooltip-ink: #101b17;
   --focus: #8dbbf2;
@@ -138,6 +144,23 @@ button, select, input { font: inherit; color: inherit; }
 }
 .top .sub { color: var(--ink-2); margin-top: 4px; max-width: 62ch; }
 .top .meta { color: var(--muted); font-size: 12px; text-align: right; }
+
+/* ---------- abas ---------- */
+.tabs { display: flex; gap: 4px; margin: -6px 0 14px; border-bottom: 1px solid var(--hairline-2); }
+.tabs button {
+  border: 0; background: transparent; color: var(--ink-2); font: inherit; font-weight: 600; cursor: pointer;
+  padding: 8px 14px 10px; margin-bottom: -1px; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0;
+}
+.tabs button:hover { color: var(--ink); background: var(--surface-2); }
+.tabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+.view[hidden], [hidden] { display: none !important; }
+.chart .bar.b2 { fill: var(--bar-2); }
+.chart .bar.b2.hover { fill: var(--bar-2-hover); }
+.legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.setup { color: var(--ink-2); max-width: 70ch; line-height: 1.5; }
+.setup ol { padding-left: 20px; margin: 8px 0; }
+.setup code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+.kpi-sub.good { color: var(--accent); font-weight: 600; }
 
 /* ---------- filtros ---------- */
 .filters {
@@ -329,6 +352,12 @@ footer p { margin: 4px 0; }
   #prods-table th:nth-child(2), #prods-table td:nth-child(2),
   #prods-table th:nth-child(3), #prods-table td:nth-child(3),
   #prods-table th:nth-child(6), #prods-table td:nth-child(6) { display: none; }
+  #camp-table th:nth-child(2), #camp-table td:nth-child(2),
+  #camp-table th:nth-child(7), #camp-table td:nth-child(7),
+  #camp-table th:nth-child(8), #camp-table td:nth-child(8),
+  #camp-table th:nth-child(9), #camp-table td:nth-child(9) { display: none; }
+  #camp-table td.clip { white-space: normal; max-width: none; line-height: 1.25; }
+  .tabs button { padding: 8px 10px 10px; }
   .table-foot { flex-wrap: wrap; }
   footer { font-size: 13px; }
 }
@@ -344,6 +373,12 @@ footer p { margin: 4px 0; }
   <div class="meta" id="meta"></div>
 </header>
 
+<nav class="tabs" role="tablist" aria-label="Seções">
+  <button type="button" role="tab" data-view="sales" aria-selected="true">Vendas</button>
+  <button type="button" role="tab" data-view="meta" aria-selected="false">Meta Ads</button>
+</nav>
+
+<div class="view" id="view-sales">
 <section class="filters" aria-label="Filtros">
   <div class="field">
     <label>Período</label>
@@ -428,9 +463,73 @@ footer p { margin: 4px 0; }
   <p><b>Fonte:</b> Shopify Analytics da loja Strut (strut.com.br), extraído em <span id="gen-date"></span>. Receita = vendas líquidas (preço dos itens − descontos − devoluções), sem frete e sem impostos. Ticket médio = receita ÷ pedidos.</p>
   <p>Localização pelo endereço de entrega (ou de cobrança quando não há entrega). Pedidos sem endereço aparecem como "Não informado" e não entram no mapa.</p>
 </footer>
+</div>
+
+<div class="view" id="view-meta" hidden>
+<section class="filters" id="m-filters" aria-label="Filtros do Meta Ads">
+  <div class="field">
+    <label>Período</label>
+    <div class="presets" id="m-presets" role="group" aria-label="Períodos rápidos"></div>
+  </div>
+  <div class="field">
+    <label for="m-date-from">Datas</label>
+    <div class="dates">
+      <input type="date" id="m-date-from"><span>até</span><input type="date" id="m-date-to">
+    </div>
+  </div>
+  <div class="field"><label for="m-campaign">Campanha</label><select id="m-campaign"></select></div>
+  <div class="field"><label for="m-status">Status</label><select id="m-status"></select></div>
+  <button class="clear" id="m-clear" hidden>Limpar filtros</button>
+</section>
+<div class="chips" id="m-chips"></div>
+
+<section class="kpis" id="m-kpis" aria-label="Indicadores do Meta Ads"></section>
+
+<section class="grid-2" id="m-charts">
+  <div class="card">
+    <div class="card-head"><h2 id="m-trend-title">Investimento e vendas por mês</h2><span class="hint" id="m-trend-hint"></span></div>
+    <div class="chart" id="m-trend"><div class="tooltip" id="m-trend-tip" hidden></div></div>
+    <div class="legend" id="m-legend"></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>Vendas por campanha</h2><span class="hint">Valor atribuído · clique para filtrar</span></div>
+    <div class="chart" id="m-camps"><div class="tooltip" id="m-camps-tip" hidden></div></div>
+  </div>
+</section>
+
+<section class="card" id="m-table-card" style="margin-top:14px">
+  <div class="card-head"><h2>Campanhas</h2><input class="search" id="m-search" type="search" placeholder="Buscar campanha" aria-label="Buscar campanha"></div>
+  <div class="table-wrap">
+    <table id="camp-table">
+      <thead><tr>
+        <th data-k="name">Campanha</th><th data-k="status">Status</th><th class="n" data-k="spend" aria-sort="descending">Investimento</th><th class="n" data-k="purchases">Vendas</th><th class="n" data-k="value">Valor</th><th class="n" data-k="roas">ROAS</th><th class="n" data-k="cpa">Custo/venda</th><th class="n" data-k="link">Cliques</th><th class="n" data-k="ctr">CTR</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div class="table-foot"><span id="m-foot"></span></div>
+</section>
+
+<section class="card setup" id="m-setup" hidden>
+  <h2>Meta Ads ainda não conectado</h2>
+  <p>Esta aba mostra investimento, compras atribuídas, valor de vendas, ROAS e custo por venda das campanhas, por período e por campanha. Para ativar:</p>
+  <ol>
+    <li>No Gerenciador de Negócios do Meta, crie um usuário do sistema com acesso à conta de anúncios e gere um token com a permissão <code>ads_read</code>.</li>
+    <li>No GitHub do dashboard, cadastre o segredo <code>META_ACCESS_TOKEN</code> e a variável <code>META_AD_ACCOUNT_ID</code> (o número da conta de anúncios).</li>
+    <li>Rode o workflow <i>Atualizar e publicar dashboard</i> com a data inicial em <i>meta_since</i>.</li>
+  </ol>
+  <p>Depois disso a aba passa a ser atualizada todo dia, junto com as vendas.</p>
+</section>
+
+<footer>
+  <p><b>Fonte:</b> Meta Marketing API, conta <span id="m-account"></span>, atualizado em <span id="m-gen-date"></span>. Vendas e valor = compras atribuídas pelo Meta (evento de compra, janela de atribuição padrão da conta). ROAS = valor das compras ÷ investimento. Custo por venda = investimento ÷ compras.</p>
+  <p>A atribuição do Meta pode contar uma mesma compra também em outras fontes; compare com a receita da loja na aba Vendas.</p>
+</footer>
+</div>
 
 <script src="br-map.js"></script>
 <script src="data.js"></script>
+<script src="meta.js"></script>
 <script>
 (function () {
   'use strict';
@@ -921,12 +1020,261 @@ footer p { margin: 4px 0; }
   let lastW = innerWidth, resizeTimer = 0;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => { if (innerWidth !== lastW) { lastW = innerWidth; renderTrend(); renderProductChart(); } }, 150);
+    resizeTimer = setTimeout(() => { if (innerWidth !== lastW) { lastW = innerWidth; if (view === 'sales') { renderTrend(); renderProductChart(); } else if (hasMeta) { renderMetaTrend(); renderCampChart(); } } }, 150);
   });
+
+  // ======================================================================
+  // Meta Ads
+  // ======================================================================
+  const MD = window.META_DATA;
+  const MC = { camp: 0, day: 1, spend: 2, impr: 3, reach: 4, clicks: 5, link: 6, purch: 7, value: 8 };
+  const fmtX = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtPct2 = new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const hasMeta = !!(MD && MD.rows && MD.rows.length);
+  let MF = null, MPRESETS = [], MLAST = 0, MEPOCH = null, campSort = { key: 'spend', dir: 'desc' };
+  const mDayToDate = d => new Date(MEPOCH.getTime() + d * 864e5);
+  const mDateToDay = dt => Math.round((dt.getTime() - MEPOCH.getTime()) / 864e5);
+  const mMonthKey = d => { const dt = mDayToDate(d); return dt.getFullYear() * 12 + dt.getMonth(); };
+
+  function setupMeta() {
+    $('m-setup').hidden = hasMeta;
+    for (const id of ['m-filters', 'm-chips', 'm-kpis', 'm-charts', 'm-table-card']) $(id).hidden = !hasMeta;
+    $('m-account').textContent = hasMeta ? (MD.account || '—') : '—';
+    $('m-gen-date').textContent = hasMeta ? fmtDate.format(new Date((MD.fetchedAt || MD.generatedAt) + 'T00:00:00')) : '—';
+    if (!hasMeta) return;
+    MEPOCH = new Date(MD.epoch + 'T00:00:00'); MLAST = MD.days - 1;
+    const lastDate = mDayToDate(MLAST);
+    MF = { from: Math.max(0, MLAST - 29), to: MLAST, preset: '30d', camp: -1, status: '' };
+    MPRESETS = [['all', 'Todo o período', () => [0, MLAST]]];
+    for (let y = lastDate.getFullYear(); y >= MEPOCH.getFullYear() && MPRESETS.length < 3; y--) {
+      MPRESETS.push([String(y), String(y), () => [Math.max(0, mDateToDay(new Date(y, 0, 1))), Math.min(MLAST, mDateToDay(new Date(y, 11, 31)))]]);
+    }
+    MPRESETS.push(['mes', 'Mês atual', () => [Math.max(0, mDateToDay(new Date(lastDate.getFullYear(), lastDate.getMonth(), 1))), MLAST]],
+      ['90d', 'Últimos 90 dias', () => [Math.max(0, MLAST - 89), MLAST]], ['30d', 'Últimos 30 dias', () => [Math.max(0, MLAST - 29), MLAST]], ['7d', 'Últimos 7 dias', () => [Math.max(0, MLAST - 6), MLAST]]);
+    const p = $('m-presets');
+    for (const [key, label] of MPRESETS) {
+      const b = el('button', null, label); b.type = 'button'; b.dataset.key = key;
+      b.addEventListener('click', () => { const [a, z] = MPRESETS.find(x => x[0] === key)[2](); MF.from = a; MF.to = z; MF.preset = key; updateMeta(); });
+      p.appendChild(b);
+    }
+    $('m-date-from').min = iso(MEPOCH); $('m-date-from').max = iso(lastDate); $('m-date-to').min = iso(MEPOCH); $('m-date-to').max = iso(lastDate);
+    $('m-date-from').addEventListener('change', e => { const d = e.target.valueAsDate; if (!d) return; MF.from = Math.min(Math.max(0, mDateToDay(new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))), MF.to); MF.preset = ''; updateMeta(); });
+    $('m-date-to').addEventListener('change', e => { const d = e.target.valueAsDate; if (!d) return; MF.to = Math.max(Math.min(MLAST, mDateToDay(new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))), MF.from); MF.preset = ''; updateMeta(); });
+    fillSelect($('m-campaign'), [['-1', 'Todas as campanhas'], ...MD.campaigns.map((c, i) => [String(i), c.name])], '-1');
+    const statuses = [...new Set(MD.campaigns.map(c => c.status))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    fillSelect($('m-status'), [['', 'Todos os status'], ...statuses.map(st => [st, st])], '');
+    $('m-campaign').addEventListener('change', e => { MF.camp = +e.target.value; updateMeta(); });
+    $('m-status').addEventListener('change', e => { MF.status = e.target.value; updateMeta(); });
+    $('m-clear').addEventListener('click', () => { MF.camp = -1; MF.status = ''; MF.from = Math.max(0, MLAST - 29); MF.to = MLAST; MF.preset = '30d'; updateMeta(); });
+    $('m-search').addEventListener('input', renderCampTable);
+    setupSort($('camp-table'), v => { campSort = v; renderCampTable(); }, () => campSort);
+    const lg = $('m-legend');
+    const sw = (cls, label) => { const w = el('span'); const i = el('i', 'sw'); i.style.background = `var(${cls})`; w.append(i, label); return w; };
+    lg.append(sw('--bar-2', 'Investimento'), sw('--bar', 'Valor das vendas atribuídas'));
+    updateMeta();
+  }
+
+  let MA = null;
+  function aggregateMeta() {
+    const tot = { spend: 0, impr: 0, clicks: 0, link: 0, purch: 0, value: 0 };
+    const byMonth = new Map(), byCamp = new Map();
+    for (const r of MD.rows) {
+      const d = r[MC.day];
+      if (d < MF.from || d > MF.to) continue;
+      const c = r[MC.camp];
+      if (MF.camp >= 0 && c !== MF.camp) continue;
+      if (MF.status && MD.campaigns[c].status !== MF.status) continue;
+      tot.spend += r[MC.spend]; tot.impr += r[MC.impr]; tot.clicks += r[MC.clicks]; tot.link += r[MC.link]; tot.purch += r[MC.purch]; tot.value += r[MC.value];
+      const mk = mMonthKey(d); let m = byMonth.get(mk); if (!m) { m = { spend: 0, purch: 0, value: 0 }; byMonth.set(mk, m); }
+      m.spend += r[MC.spend]; m.purch += r[MC.purch]; m.value += r[MC.value];
+      let e = byCamp.get(c); if (!e) { e = { spend: 0, impr: 0, clicks: 0, link: 0, purch: 0, value: 0 }; byCamp.set(c, e); }
+      e.spend += r[MC.spend]; e.impr += r[MC.impr]; e.clicks += r[MC.clicks]; e.link += r[MC.link]; e.purch += r[MC.purch]; e.value += r[MC.value];
+    }
+    // receita da loja no mesmo intervalo de datas (todas as fontes), para contexto
+    const a = dateToDay(mDayToDate(MF.from)), z = dateToDay(mDayToDate(MF.to));
+    let storeNet = 0; for (const r of ROWS) if (r[C.day] >= a && r[C.day] <= z) storeNet += r[C.net];
+    return { tot, byMonth, byCamp, storeNet };
+  }
+
+  function updateMeta() {
+    MA = aggregateMeta();
+    $('m-presets').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.key === MF.preset)));
+    $('m-date-from').value = iso(mDayToDate(MF.from)); $('m-date-to').value = iso(mDayToDate(MF.to));
+    $('m-campaign').value = String(MF.camp); $('m-status').value = MF.status;
+    const chips = $('m-chips'); chips.replaceChildren();
+    const chip = (label, value, clear) => { const c = el('span', 'chip'); c.append(label + ': '); c.appendChild(el('b', null, value)); const x = el('button', null, '×'); x.type = 'button'; x.setAttribute('aria-label', 'Remover filtro ' + label); x.addEventListener('click', () => { clear(); updateMeta(); }); c.appendChild(x); chips.appendChild(c); };
+    if (MF.preset !== 'all') chip('Período', fmtDate.format(mDayToDate(MF.from)) + ' – ' + fmtDate.format(mDayToDate(MF.to)), () => { MF.from = 0; MF.to = MLAST; MF.preset = 'all'; });
+    if (MF.camp >= 0) chip('Campanha', MD.campaigns[MF.camp].name, () => { MF.camp = -1; });
+    if (MF.status) chip('Status', MF.status, () => { MF.status = ''; });
+    $('m-clear').hidden = !(MF.camp >= 0 || MF.status || MF.preset !== '30d');
+    renderMetaKpis(); renderMetaTrend(); renderCampChart(); renderCampTable(); renderHeaderMeta();
+  }
+
+  function renderMetaKpis() {
+    const t = MA.tot, roas = t.spend ? t.value / t.spend : 0, cpa = t.purch ? t.spend / t.purch : 0;
+    const share = MA.storeNet > 0 ? t.value / MA.storeNet : null;
+    const tiles = [
+      ['Investimento', fmtBRL.format(t.spend), (MF.to - MF.from + 1) + ' dias · ' + fmtBRL2.format(t.spend / (MF.to - MF.from + 1)) + '/dia'],
+      ['Vendas atribuídas', fmtInt.format(t.purch), t.link ? fmtPct2.format(t.purch / t.link) + ' dos cliques no link' : ''],
+      ['Valor das vendas', fmtBRL.format(t.value), share != null ? fmtPct.format(share) + ' da receita da loja no período' : ''],
+      ['ROAS', t.spend ? fmtX.format(roas) + '×' : '—', 'valor das vendas ÷ investimento'],
+      ['Custo por venda', t.purch ? fmtBRL2.format(cpa) : '—', t.purch ? 'ticket médio ' + fmtBRL2.format(t.value / t.purch) : 'sem vendas no recorte'],
+      ['Cliques no link', fmtInt.format(t.link), t.impr ? 'CTR ' + fmtPct2.format(t.link / t.impr) : ''],
+      ['CPC', t.link ? fmtBRL2.format(t.spend / t.link) : '—', 'por clique no link'],
+      ['Impressões', fmtInt.format(t.impr), t.impr ? 'CPM ' + fmtBRL2.format(t.spend / t.impr * 1000) : ''],
+    ];
+    const k = $('m-kpis'); k.replaceChildren();
+    for (const [label, value, sub] of tiles) { const c = el('div', 'kpi'); c.append(el('div', 'eyebrow', label), el('div', 'kpi-value num', value), el('div', 'kpi-sub', sub)); k.appendChild(c); }
+  }
+
+  function renderMetaTrend() {
+    const host = $('m-trend'); host.querySelectorAll('svg').forEach(x => x.remove());
+    const tip = $('m-trend-tip'); tip.hidden = true;
+    const m0 = mMonthKey(MF.from), m1 = mMonthKey(MF.to);
+    const months = []; for (let m = m0; m <= m1; m++) months.push({ m, ...(MA.byMonth.get(m) || { spend: 0, purch: 0, value: 0 }) });
+    $('m-trend-hint').textContent = months.length + (months.length === 1 ? ' mês' : ' meses');
+    const W = chartWidth(host), narrow = W < 560, H = narrow ? 200 : 240, padL = narrow ? 44 : 56, padR = 12, padT = 16, padB = 30;
+    const iw = W - padL - padR, ih = H - padT - padB;
+    const max = Math.max(...months.map(x => Math.max(x.spend, x.value)), 1);
+    const ticks = niceTicks(max, 4), yMax = ticks[ticks.length - 1];
+    const y = v => padT + ih - (Math.max(0, v) / yMax) * ih;
+    const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Investimento e vendas por mês' });
+    for (const t of ticks) {
+      svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: y(t), y2: y(t), class: t === 0 ? 'baseline' : 'gridline' }));
+      const lab = svgEl('text', { x: padL - 8, y: y(t) + 3.5, 'text-anchor': 'end' }); lab.textContent = axisLabel(t); svg.appendChild(lab);
+    }
+    const n = months.length, slot = iw / n, gap = Math.min(3, slot * 0.06), bw = Math.max(2, Math.min(22, (slot - 4 - gap) / 2));
+    const labelEvery = Math.max(1, Math.ceil(n * (narrow ? 58 : 64) / iw));
+    const groups = [];
+    months.forEach((mo, i) => {
+      const x0 = padL + i * slot + (slot - (2 * bw + gap)) / 2;
+      const b1 = svgEl('rect', { x: x0, y: y(mo.spend), width: bw, height: Math.max(0, ih - (y(mo.spend) - padT)), rx: Math.min(3, bw / 2), class: 'bar b2' });
+      const b2 = svgEl('rect', { x: x0 + bw + gap, y: y(mo.value), width: bw, height: Math.max(0, ih - (y(mo.value) - padT)), rx: Math.min(3, bw / 2), class: 'bar' });
+      svg.append(b1, b2); groups.push([b1, b2]);
+      if (i % labelEvery === 0) {
+        const dt = new Date(Math.floor(mo.m / 12), mo.m % 12, 1);
+        const lab = svgEl('text', { x: padL + i * slot + slot / 2, y: H - padB + 16, 'text-anchor': 'middle' }); lab.textContent = fmtMonth.format(dt).replace('.', ''); svg.appendChild(lab);
+      }
+    });
+    const cross = svgEl('line', { x1: 0, x2: 0, y1: padT, y2: padT + ih, class: 'crosshair', visibility: 'hidden' }); svg.appendChild(cross);
+    const hit = svgEl('rect', { x: padL, y: padT, width: iw, height: ih, class: 'hit' }); svg.appendChild(hit);
+    let hovered = null;
+    const move = e => {
+      const r = svg.getBoundingClientRect(); const px = (e.clientX - r.left) * (W / r.width);
+      const i = Math.max(0, Math.min(n - 1, Math.floor((px - padL) / slot)));
+      if (hovered !== null) groups[hovered].forEach(b => b.classList.remove('hover'));
+      hovered = i; groups[i].forEach(b => b.classList.add('hover'));
+      const cx = padL + i * slot + slot / 2; cross.setAttribute('x1', cx); cross.setAttribute('x2', cx); cross.setAttribute('visibility', 'visible');
+      const mo = months[i]; tip.replaceChildren();
+      tip.appendChild(el('div', 't-title', cap(fmtMonthLong.format(new Date(Math.floor(mo.m / 12), mo.m % 12, 1)))));
+      const row = (a, b) => { const q = el('div', 't-row'); q.append(el('span', null, a), el('span', null, b)); tip.appendChild(q); };
+      row('Investimento', fmtBRL.format(mo.spend)); row('Vendas', fmtInt.format(mo.purch)); row('Valor', fmtBRL.format(mo.value));
+      row('ROAS', mo.spend ? fmtX.format(mo.value / mo.spend) + '×' : '—'); row('Custo por venda', mo.purch ? fmtBRL2.format(mo.spend / mo.purch) : '—');
+      tip.hidden = false;
+      const hr = host.getBoundingClientRect();
+      const tx = cx * (r.width / W) + (r.left - hr.left);
+      const tw = tip.offsetWidth; tip.style.left = Math.max(tw / 2, Math.min(hr.width - tw / 2, tx)) + 'px';
+      const top = Math.min(y(mo.spend), y(mo.value));
+      tip.style.top = (top * (r.height / H) + (r.top - hr.top)) + 'px';
+      tip.style.transform = top < 90 ? 'translate(-50%, 12px)' : 'translate(-50%, calc(-100% - 10px))';
+    };
+    hit.addEventListener('pointermove', move); hit.addEventListener('pointerenter', move);
+    hit.addEventListener('pointerleave', () => { tip.hidden = true; cross.setAttribute('visibility', 'hidden'); if (hovered !== null) groups[hovered].forEach(b => b.classList.remove('hover')); hovered = null; });
+    host.insertBefore(svg, tip);
+  }
+
+  function renderCampChart() {
+    const host = $('m-camps'); host.querySelectorAll('svg, .empty').forEach(x => x.remove());
+    const tip = $('m-camps-tip'); tip.hidden = true;
+    let list = [...MA.byCamp.entries()].map(([k, v]) => ({ k, ...v })).sort((a, b) => b.value - a.value || b.spend - a.spend).slice(0, 12);
+    if (!list.length) { host.insertBefore(el('div', 'empty', 'Sem dados neste recorte.'), tip); return; }
+    const W = chartWidth(host), narrow = W < 560;
+    const rowH = narrow ? 42 : 26, padL = narrow ? 0 : 270, padR = narrow ? 128 : 120, padT = 4;
+    const H = padT + list.length * rowH + 4, iw = W - padL - padR;
+    const max = Math.max(...list.map(x => x.value), 1);
+    const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Vendas por campanha' });
+    list.forEach((c, i) => {
+      const y = padT + i * rowH, name = MD.campaigns[c.k].name;
+      const g = svgEl('g', { class: 'hrow' + (MF.camp === c.k ? ' selected' : ''), tabindex: '0', role: 'button' });
+      g.appendChild(svgEl('rect', { x: 0, y, width: W, height: rowH, fill: 'transparent' }));
+      const w = Math.max(2, Math.max(0, c.value) / max * iw);
+      const roas = c.spend ? fmtX.format(c.value / c.spend) + '×' : '';
+      const txt = compact(c.value) + (roas ? (narrow ? ' · ' : ' · ROAS ') + roas : '');
+      if (narrow) {
+        const lab = svgEl('text', { x: 0, y: y + 14, class: 'cat-label' }); lab.textContent = truncate(name, Math.floor(W / 7.2)); g.appendChild(lab);
+        g.appendChild(svgEl('rect', { x: 0, y: y + 22, width: w, height: 12, rx: 4, class: 'hbar' }));
+        const v = svgEl('text', { x: w + 8, y: y + 32, class: 'dlabel' }); v.textContent = txt; g.appendChild(v);
+      } else {
+        const lab = svgEl('text', { x: padL - 10, y: y + rowH / 2 + 4, 'text-anchor': 'end', class: 'cat-label' }); lab.textContent = truncate(name, 42); g.appendChild(lab);
+        g.appendChild(svgEl('rect', { x: padL, y: y + 5, width: w, height: rowH - 10, rx: 4, class: 'hbar' }));
+        const v = svgEl('text', { x: padL + w + 8, y: y + rowH / 2 + 4, class: 'dlabel' }); v.textContent = txt; g.appendChild(v);
+      }
+      const toggle = () => { MF.camp = MF.camp === c.k ? -1 : c.k; updateMeta(); };
+      g.addEventListener('click', toggle);
+      g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+      const show = e => {
+        tip.replaceChildren(); tip.appendChild(el('div', 't-title', name));
+        const row = (a, b) => { const q = el('div', 't-row'); q.append(el('span', null, a), el('span', null, b)); tip.appendChild(q); };
+        row('Investimento', fmtBRL.format(c.spend)); row('Vendas', fmtInt.format(c.purch)); row('Valor', fmtBRL.format(c.value));
+        row('ROAS', c.spend ? fmtX.format(c.value / c.spend) + '×' : '—'); row('Custo por venda', c.purch ? fmtBRL2.format(c.spend / c.purch) : '—');
+        positionTip(tip, host, e, g);
+      };
+      g.addEventListener('pointermove', show); g.addEventListener('pointerenter', show); g.addEventListener('focus', () => show(null));
+      g.addEventListener('pointerleave', () => { tip.hidden = true; }); g.addEventListener('blur', () => { tip.hidden = true; });
+      svg.appendChild(g);
+    });
+    host.insertBefore(svg, tip);
+  }
+
+  function renderCampTable() {
+    const q = $('m-search').value.trim().toLowerCase();
+    let rows = [...MA.byCamp.entries()].map(([k, v]) => ({ k, name: MD.campaigns[k].name, status: MD.campaigns[k].status, objective: MD.campaigns[k].objective,
+      spend: v.spend, purchases: v.purch, value: v.value, roas: v.spend ? v.value / v.spend : 0, cpa: v.purch ? v.spend / v.purch : 0, link: v.link, ctr: v.impr ? v.link / v.impr : 0 }));
+    if (q) rows = rows.filter(r => r.name.toLowerCase().includes(q));
+    const dir = campSort.dir === 'desc' ? -1 : 1, textual = campSort.key === 'name' || campSort.key === 'status';
+    rows.sort((a, b) => textual ? dir * a[campSort.key].localeCompare(b[campSort.key], 'pt-BR') : (dir * (a[campSort.key] - b[campSort.key])) || a.name.localeCompare(b.name, 'pt-BR'));
+    const table = $('camp-table'), tbody = table.querySelector('tbody'); tbody.replaceChildren();
+    applySortMarks(table, campSort);
+    for (const r of rows) {
+      const tr = el('tr'); tr.className = MF.camp === r.k ? 'selected' : '';
+      const nameTd = cell('', false); nameTd.className = 'clip'; nameTd.title = r.name + ' · ' + r.objective; nameTd.appendChild(el('span', 'clip-text', r.name)); tr.appendChild(nameTd);
+      tr.append(cell(r.status, false), cell(fmtBRL.format(r.spend)), cell(fmtInt.format(r.purchases)), cell(fmtBRL.format(r.value)),
+        cell(r.spend ? fmtX.format(r.roas) + '×' : '—'), cell(r.purchases ? fmtBRL2.format(r.cpa) : '—'), cell(fmtInt.format(r.link)), cell(fmtPct2.format(r.ctr)));
+      tr.addEventListener('click', () => { MF.camp = MF.camp === r.k ? -1 : r.k; updateMeta(); });
+      tbody.appendChild(tr);
+    }
+    if (!rows.length) { const tr = el('tr'); const td = el('td', 'empty', 'Nenhuma campanha neste recorte.'); td.colSpan = 9; tr.appendChild(td); tbody.appendChild(tr); }
+    $('m-foot').textContent = fmtInt.format(rows.length) + (rows.length === 1 ? ' campanha' : ' campanhas') + ' com entrega no período';
+  }
+
+  // ---------- abas ----------
+  let view = 'sales';
+  function renderHeaderMeta() {
+    if (view === 'meta') {
+      document.querySelector('.top .eyebrow').textContent = 'Meta Ads · campanhas';
+      if (hasMeta) $('meta').replaceChildren(el('div', null, fmtDate.format(mDayToDate(MF.from)) + ' – ' + fmtDate.format(mDayToDate(MF.to))), el('div', null, MF.camp >= 0 ? MD.campaigns[MF.camp].name : 'Todas as campanhas'));
+      else $('meta').replaceChildren(el('div', null, 'Não conectado'));
+    } else {
+      document.querySelector('.top .eyebrow').textContent = 'Relatório de vendas · Shopify e Mercado Livre';
+      renderMeta();
+    }
+  }
+  function showView(v) {
+    view = v;
+    document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.view === v)));
+    $('view-sales').hidden = v !== 'sales'; $('view-meta').hidden = v !== 'meta';
+    if (v === 'meta' && hasMeta) { renderMetaTrend(); renderCampChart(); }   // largura só existe com a aba visível
+    renderHeaderMeta();
+    if (location.hash !== '#' + v) history.replaceState(null, '', v === 'sales' ? location.pathname + location.search : '#' + v);
+  }
+  document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
+  window.addEventListener('hashchange', () => showView(location.hash === '#meta' ? 'meta' : 'sales'));
 
   // ---------- boot ----------
   buildControls();
   buildMap();
   update();
+  setupMeta();
+  showView(location.hash === '#meta' ? 'meta' : 'sales');
 })();
 </script>

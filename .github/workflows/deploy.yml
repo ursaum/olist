@@ -11,6 +11,10 @@ on:
         description: "Buscar pedidos do Olist desde (AAAA-MM-DD); vazio = últimos 60 dias"
         required: false
         default: ""
+      meta_since:
+        description: "Buscar métricas do Meta Ads desde (AAAA-MM-DD); vazio = últimos 60 dias"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -62,9 +66,26 @@ jobs:
             python3 scripts/fetch_olist.py --out data/olist/orders.json
           fi
 
+      - name: Buscar métricas das campanhas no Meta Ads
+        if: github.event_name != 'push'
+        env:
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          META_AD_ACCOUNT_ID: ${{ vars.META_AD_ACCOUNT_ID }}
+          META_SINCE: ${{ inputs.meta_since }}
+        run: |
+          if [ -z "$META_ACCESS_TOKEN" ] || [ -z "$META_AD_ACCOUNT_ID" ]; then
+            echo "Segredo META_ACCESS_TOKEN / variável META_AD_ACCOUNT_ID não configurados; pulando o Meta Ads."
+            exit 0
+          fi
+          if [ -n "$META_SINCE" ]; then
+            python3 scripts/fetch_meta.py --since "$META_SINCE" --out data/meta/insights.json
+          else
+            python3 scripts/fetch_meta.py --out data/meta/insights.json
+          fi
+
       - name: Salvar pedidos acumulados no repositório
         run: |
-          for f in data/shopify/api-orders.json data/olist/orders.json; do
+          for f in data/shopify/api-orders.json data/olist/orders.json data/meta/insights.json; do
             [ -e "$f" ] && git add "$f"
           done
           if git diff --cached --quiet; then
@@ -82,7 +103,9 @@ jobs:
           done
 
       - name: Gerar dados do dashboard
-        run: python3 scripts/build_shopify.py --in 'data/shopify/*.json' 'data/olist/*.json' --out dashboard
+        run: |
+          python3 scripts/build_shopify.py --in 'data/shopify/*.json' 'data/olist/*.json' --out dashboard
+          python3 scripts/build_meta.py --in data/meta/insights.json --out dashboard
 
       - name: Publicar no GitHub Pages (branch gh-pages)
         env:

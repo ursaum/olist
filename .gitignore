@@ -2,3 +2,4 @@ data/raw/
 __pycache__/
 # gerado no deploy por scripts/build_shopify.py
 dashboard/data.js
+dashboard/meta.js

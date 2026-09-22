@@ -60,6 +60,30 @@ distribuído entre os itens, frete à parte, pedido cancelado com devolução ig
 Comissões do marketplace não são descontadas, para os canais ficarem comparáveis. O tipo de
 produto vem do início do título (ex.: "Bota …"), como nos produtos da Shopify sem tipo.
 
+### Meta Ads (aba "Meta Ads")
+
+A aba *Meta Ads* mostra, por campanha e por dia, investimento, impressões, alcance, cliques,
+cliques no link, compras atribuídas e valor das compras (evento *omni_purchase* do Meta, com a
+janela de atribuição da conta), e calcula ROAS, custo por venda, CTR, CPC e CPM. Também compara o
+valor atribuído com a receita líquida da loja no mesmo período. A cada execução o workflow roda
+`scripts/fetch_meta.py`: busca na Marketing API (Graph API) os últimos 60 dias e substitui esses
+dias em `data/meta/insights.json`, para que compras atribuídas depois do clique fiquem corretas.
+Enquanto o token não estiver configurado, a aba mostra o passo a passo abaixo.
+
+Configuração (uma vez):
+
+1. No Gerenciador de Negócios (business.facebook.com), em Configurações do negócio → Usuários →
+   Usuários do sistema, crie um usuário do sistema (função Administrador), atribua a ele a conta
+   de anúncios e gere um token com a permissão `ads_read` (esse token não expira).
+2. No GitHub, em Settings → Secrets and variables → Actions, crie o segredo `META_ACCESS_TOKEN`
+   com o token e, na aba *Variables*, a variável `META_AD_ACCOUNT_ID` com o id numérico da conta
+   de anúncios (sem o prefixo `act_`).
+3. Para carregar o histórico, rode o workflow à mão em Actions → *Atualizar e publicar dashboard*
+   → *Run workflow*, preenchendo *meta_since* com a data inicial (ex.: `2025-01-01`).
+
+O conector do Meta Ads do Claude não serve aqui: a conta de anúncios real não está habilitada
+para ele, por isso o dashboard usa o token da API diretamente.
+
 ### Shopify pela Admin API (alternativa à rotina)
 
 Se preferir não depender da rotina, o workflow também aceita um token da Admin API da Shopify:
@@ -91,7 +115,11 @@ data/shopify/sales-base-*.json base histórica (ShopifyQL até 14/09/2026), em b
 data/shopify/sales-AAAA-MM.json meses reextraídos pela rotina diária (substituem a base no mês)
 data/shopify/api-orders.json pedidos recentes acumulados pela Admin API (gravado pelo workflow)
 data/olist/orders.json      pedidos do Mercado Livre vindos do Olist Tiny (gravado pelo workflow)
+data/meta/insights.json     métricas diárias das campanhas do Meta Ads (gravado pelo workflow)
+dashboard/meta.js           dados da aba Meta Ads (gerado no deploy, não versionado)
 scripts/fetch_olist.py      busca no Olist Tiny os pedidos de marketplace e acumula em data/olist/orders.json
+scripts/fetch_meta.py       busca na Marketing API do Meta as métricas das campanhas e acumula em data/meta/insights.json
+scripts/build_meta.py       gera dashboard/meta.js a partir de data/meta/insights.json
 scripts/fetch_shopify.py    busca pedidos na Admin API e acumula em api-orders.json
 scripts/build_shopify.py    gera dashboard/data.js a partir das extrações
 scripts/shopifyql_to_base.py converte o resultado ShopifyQL de um mês em data/shopify/sales-AAAA-MM.json
