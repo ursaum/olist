@@ -84,6 +84,36 @@ Configuração (uma vez):
 O conector do Meta Ads do Claude não serve aqui: a conta de anúncios real não está habilitada
 para ele, por isso o dashboard usa o token da API diretamente.
 
+### Google Analytics (aba "Google Analytics")
+
+A aba *Google Analytics* mostra, por período, sessões, usuários, visualizações de página, taxa de
+engajamento, tempo médio, adições ao carrinho, checkouts, compras e receita registradas pelo GA4,
+além das páginas mais acessadas (com tempo médio), páginas de entrada, produtos vistos, no carrinho
+e comprados, canais, origem/mídia, dispositivos e estados. A cada execução o workflow roda
+`scripts/fetch_ga.py`: busca na Google Analytics Data API os últimos 60 dias, por dia, e substitui
+esses dias em `data/ga/analytics.json`. Para páginas, origens, produtos e páginas de entrada só
+entram os maiores da janela (200, 40, 300 e 100); o resto vai para "(outros)".
+Enquanto a conta de serviço não estiver configurada, a aba mostra o passo a passo abaixo.
+
+Configuração (uma vez):
+
+1. No Google Cloud (console.cloud.google.com), crie um projeto ou use um existente, ative a API
+   *Google Analytics Data API* e, em IAM e administrador → Contas de serviço, crie uma conta de
+   serviço e gere uma chave JSON.
+2. No Google Analytics, em Administrador → Gerenciamento de acesso à propriedade, adicione o e-mail
+   da conta de serviço (termina em `iam.gserviceaccount.com`) com a função *Leitor*.
+3. No GitHub, em Settings → Secrets and variables → Actions, crie o segredo
+   `GA_SERVICE_ACCOUNT_JSON` com o conteúdo inteiro do arquivo JSON e, na aba *Variables*, a
+   variável `GA_PROPERTY_ID` com o id numérico da propriedade GA4 (Administrador → Detalhes da
+   propriedade).
+4. Para carregar o histórico, rode o workflow à mão em Actions → *Atualizar e publicar dashboard*
+   → *Run workflow*, preenchendo *ga_since* com a data inicial (ex.: `2025-01-01`).
+
+Usuários são somados dia a dia (um visitante em dias diferentes conta mais de uma vez). Compras e
+receita do GA vêm do evento *purchase* do site e diferem das vendas da loja por bloqueio de
+rastreamento e consentimento; os produtos só aparecem se a loja envia os eventos de e-commerce
+ao GA4 (o canal Google & YouTube da Shopify faz isso).
+
 ### Shopify pela Admin API (alternativa à rotina)
 
 Se preferir não depender da rotina, o workflow também aceita um token da Admin API da Shopify:
@@ -117,9 +147,13 @@ data/shopify/api-orders.json pedidos recentes acumulados pela Admin API (gravado
 data/olist/orders.json      pedidos do Mercado Livre vindos do Olist Tiny (gravado pelo workflow)
 data/meta/insights.json     métricas diárias das campanhas do Meta Ads (gravado pelo workflow)
 dashboard/meta.js           dados da aba Meta Ads (gerado no deploy, não versionado)
+data/ga/analytics.json      métricas diárias do site vindas do Google Analytics (gravado pelo workflow)
+dashboard/ga.js             dados da aba Google Analytics (gerado no deploy, não versionado)
 scripts/fetch_olist.py      busca no Olist Tiny os pedidos de marketplace e acumula em data/olist/orders.json
 scripts/fetch_meta.py       busca na Marketing API do Meta as métricas das campanhas e acumula em data/meta/insights.json
 scripts/build_meta.py       gera dashboard/meta.js a partir de data/meta/insights.json
+scripts/fetch_ga.py         busca na Google Analytics Data API as métricas do site e acumula em data/ga/analytics.json
+scripts/build_ga.py         gera dashboard/ga.js a partir de data/ga/analytics.json
 scripts/fetch_shopify.py    busca pedidos na Admin API e acumula em api-orders.json
 scripts/build_shopify.py    gera dashboard/data.js a partir das extrações
 scripts/shopifyql_to_base.py converte o resultado ShopifyQL de um mês em data/shopify/sales-AAAA-MM.json

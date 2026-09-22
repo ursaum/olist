@@ -15,6 +15,10 @@ on:
         description: "Buscar métricas do Meta Ads desde (AAAA-MM-DD); vazio = últimos 60 dias"
         required: false
         default: ""
+      ga_since:
+        description: "Buscar métricas do Google Analytics desde (AAAA-MM-DD); vazio = últimos 60 dias"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -83,9 +87,27 @@ jobs:
             python3 scripts/fetch_meta.py --out data/meta/insights.json
           fi
 
+      - name: Buscar métricas do site no Google Analytics
+        if: github.event_name != 'push'
+        env:
+          GA_SERVICE_ACCOUNT_JSON: ${{ secrets.GA_SERVICE_ACCOUNT_JSON }}
+          GA_PROPERTY_ID: ${{ vars.GA_PROPERTY_ID }}
+          GA_SINCE: ${{ inputs.ga_since }}
+        run: |
+          if [ -z "$GA_SERVICE_ACCOUNT_JSON" ] || [ -z "$GA_PROPERTY_ID" ]; then
+            echo "Segredo GA_SERVICE_ACCOUNT_JSON / variável GA_PROPERTY_ID não configurados; pulando o Google Analytics."
+            exit 0
+          fi
+          pip install -q google-auth requests
+          if [ -n "$GA_SINCE" ]; then
+            python3 scripts/fetch_ga.py --since "$GA_SINCE" --out data/ga/analytics.json
+          else
+            python3 scripts/fetch_ga.py --out data/ga/analytics.json
+          fi
+
       - name: Salvar pedidos acumulados no repositório
         run: |
-          for f in data/shopify/api-orders.json data/olist/orders.json data/meta/insights.json; do
+          for f in data/shopify/api-orders.json data/olist/orders.json data/meta/insights.json data/ga/analytics.json; do
             [ -e "$f" ] && git add "$f"
           done
           if git diff --cached --quiet; then
@@ -106,6 +128,7 @@ jobs:
         run: |
           python3 scripts/build_shopify.py --in 'data/shopify/*.json' 'data/olist/*.json' --out dashboard
           python3 scripts/build_meta.py --in data/meta/insights.json --out dashboard
+          python3 scripts/build_ga.py --in data/ga/analytics.json --out dashboard
 
       - name: Publicar no GitHub Pages (branch gh-pages)
         env:

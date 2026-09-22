@@ -270,6 +270,9 @@ button, select, input { font: inherit; color: inherit; }
 .chart .hbar:hover, .chart .hrow:hover .hbar { fill: var(--bar-hover); }
 .chart .hrow.selected .hbar { fill: var(--select); }
 .chart .hrow { cursor: pointer; }
+.chart .hrow.static, .chart .hrow.static .hbar { cursor: default; }
+td .sub-line { display: block; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+#view-ga td.clip { max-width: 190px; }
 
 .tooltip {
   position: absolute; z-index: 5; pointer-events: none; background: var(--tooltip-bg); color: var(--tooltip-ink);
@@ -357,6 +360,16 @@ footer p { margin: 4px 0; }
   #camp-table th:nth-child(8), #camp-table td:nth-child(8),
   #camp-table th:nth-child(9), #camp-table td:nth-child(9) { display: none; }
   #camp-table td.clip { white-space: normal; max-width: none; line-height: 1.25; }
+  #g-pages-table th:nth-child(3), #g-pages-table td:nth-child(3),
+  #g-pages-table th:nth-child(5), #g-pages-table td:nth-child(5),
+  #g-landing-table th:nth-child(3), #g-landing-table td:nth-child(3),
+  #g-landing-table th:nth-child(6), #g-landing-table td:nth-child(6),
+  #g-products-table th:nth-child(2), #g-products-table td:nth-child(2),
+  #g-products-table th:nth-child(3), #g-products-table td:nth-child(3),
+  #g-products-table th:nth-child(5), #g-products-table td:nth-child(5) { display: none; }
+  #view-ga td.clip { white-space: normal; max-width: none; line-height: 1.25; }
+  #view-ga td .sub-line { display: none; }
+  #view-ga td.clip .clip-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .tabs button { padding: 8px 10px 10px; }
   .table-foot { flex-wrap: wrap; }
   footer { font-size: 13px; }
@@ -376,6 +389,7 @@ footer p { margin: 4px 0; }
 <nav class="tabs" role="tablist" aria-label="Seções">
   <button type="button" role="tab" data-view="sales" aria-selected="true">Vendas</button>
   <button type="button" role="tab" data-view="meta" aria-selected="false">Meta Ads</button>
+  <button type="button" role="tab" data-view="ga" aria-selected="false">Google Analytics</button>
 </nav>
 
 <div class="view" id="view-sales">
@@ -527,9 +541,107 @@ footer p { margin: 4px 0; }
 </footer>
 </div>
 
+<div class="view" id="view-ga" hidden>
+<section class="filters" id="g-filters" aria-label="Filtros do Google Analytics">
+  <div class="field">
+    <label>Período</label>
+    <div class="presets" id="g-presets" role="group" aria-label="Períodos rápidos"></div>
+  </div>
+  <div class="field">
+    <label for="g-date-from">Datas</label>
+    <div class="dates">
+      <input type="date" id="g-date-from"><span>até</span><input type="date" id="g-date-to">
+    </div>
+  </div>
+  <button class="clear" id="g-clear" hidden>Limpar filtros</button>
+</section>
+<div class="chips" id="g-chips"></div>
+
+<section class="kpis" id="g-kpis" aria-label="Indicadores do site"></section>
+
+<section class="grid-2" id="g-row1">
+  <div class="card">
+    <div class="card-head"><h2 id="g-trend-title">Sessões por dia</h2><span class="hint" id="g-trend-hint"></span></div>
+    <div class="chart" id="g-trend"><div class="tooltip" id="g-trend-tip" hidden></div></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>Sessões por canal</h2><span class="hint">Com taxa de conversão em compra</span></div>
+    <div class="chart" id="g-channels"><div class="tooltip" hidden></div></div>
+  </div>
+</section>
+
+<section class="grid-2" id="g-row2" style="margin-top:14px">
+  <div class="card">
+    <div class="card-head"><h2>Páginas mais acessadas</h2><input class="search" id="g-pages-search" type="search" placeholder="Buscar página" aria-label="Buscar página"></div>
+    <div class="table-wrap">
+      <table id="g-pages-table">
+        <thead><tr><th data-k="name">Página</th><th class="n" data-k="views" aria-sort="descending">Vistas</th><th class="n" data-k="users">Usuários</th><th class="n" data-k="avg" title="Tempo de engajamento ÷ visualizações">Tempo</th><th class="n" data-k="share">%</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="table-foot"><span id="g-pages-foot"></span><button class="more" id="g-pages-more" type="button" hidden></button></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>Produtos no site</h2><input class="search" id="g-products-search" type="search" placeholder="Buscar produto" aria-label="Buscar produto"></div>
+    <div class="table-wrap">
+      <table id="g-products-table">
+        <thead><tr><th data-k="name">Produto</th><th class="n" data-k="viewed">Vistas</th><th class="n" data-k="carted">Carrinho</th><th class="n" data-k="purchased" aria-sort="descending">Compras</th><th class="n" data-k="conv" title="Compras ÷ visualizações do produto">Conv.</th><th class="n" data-k="rev">Receita</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="table-foot"><span id="g-products-foot"></span><button class="more" id="g-products-more" type="button" hidden></button></div>
+  </div>
+</section>
+
+<section class="grid-2" id="g-row3" style="margin-top:14px">
+  <div class="card">
+    <div class="card-head"><h2>Páginas de entrada</h2><input class="search" id="g-landing-search" type="search" placeholder="Buscar página" aria-label="Buscar página de entrada"></div>
+    <div class="table-wrap">
+      <table id="g-landing-table">
+        <thead><tr><th data-k="name">Página de entrada</th><th class="n" data-k="sessions" aria-sort="descending">Sessões</th><th class="n" data-k="engRate" title="Sessões engajadas ÷ sessões">Engaj.</th><th class="n" data-k="purch">Compras</th><th class="n" data-k="conv" title="Compras ÷ sessões">Conv.</th><th class="n" data-k="rev">Receita</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="table-foot"><span id="g-landing-foot"></span><button class="more" id="g-landing-more" type="button" hidden></button></div>
+  </div>
+  <div class="stack">
+    <div class="card">
+      <div class="card-head"><h2>Origem / mídia</h2><span class="hint">10 maiores por sessões</span></div>
+      <div class="chart" id="g-sources"><div class="tooltip" hidden></div></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Dispositivos</h2></div>
+      <div class="chart" id="g-devices"><div class="tooltip" hidden></div></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Estados</h2><span class="hint">10 maiores por sessões</span></div>
+      <div class="chart" id="g-regions"><div class="tooltip" hidden></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="card setup" id="g-setup" hidden>
+  <h2>Google Analytics ainda não conectado</h2>
+  <p>Esta aba mostra sessões, usuários, páginas mais acessadas, tempo de engajamento, produtos vistos e comprados, canais de origem e dispositivos, por período. Para ativar:</p>
+  <ol>
+    <li>No Google Cloud, crie um projeto (ou use um existente), ative a API <i>Google Analytics Data API</i> e crie uma conta de serviço com uma chave JSON.</li>
+    <li>No Google Analytics, em Administrador → Gerenciamento de acesso à propriedade, adicione o e-mail da conta de serviço com a função <i>Leitor</i>.</li>
+    <li>No GitHub do dashboard, cadastre o segredo <code>GA_SERVICE_ACCOUNT_JSON</code> (conteúdo do JSON) e a variável <code>GA_PROPERTY_ID</code> (id numérico da propriedade GA4).</li>
+    <li>Rode o workflow <i>Atualizar e publicar dashboard</i> com a data inicial em <i>ga_since</i>.</li>
+  </ol>
+  <p>Depois disso a aba passa a ser atualizada todo dia, junto com as vendas.</p>
+</section>
+
+<footer>
+  <p><b>Fonte:</b> Google Analytics 4 (Data API), propriedade <span id="g-property"></span>, atualizado em <span id="g-gen-date"></span>. Usuários são somados dia a dia, então um mesmo visitante em dias diferentes conta mais de uma vez. Tempo médio = tempo de engajamento ÷ sessões (ou ÷ visualizações, nas páginas). Conversão = compras ÷ sessões; nos produtos, compras ÷ visualizações do produto.</p>
+  <p>Compras e receita são as registradas pelo GA no site (evento <i>purchase</i>) e podem diferir das vendas da loja por bloqueio de rastreamento e consentimento de cookies.</p>
+</footer>
+</div>
+
 <script src="br-map.js"></script>
 <script src="data.js"></script>
 <script src="meta.js"></script>
+<script src="ga.js"></script>
 <script>
 (function () {
   'use strict';
@@ -1020,7 +1132,7 @@ footer p { margin: 4px 0; }
   let lastW = innerWidth, resizeTimer = 0;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => { if (innerWidth !== lastW) { lastW = innerWidth; if (view === 'sales') { renderTrend(); renderProductChart(); } else if (hasMeta) { renderMetaTrend(); renderCampChart(); } } }, 150);
+    resizeTimer = setTimeout(() => { if (innerWidth !== lastW) { lastW = innerWidth; if (view === 'sales') { renderTrend(); renderProductChart(); } else if (view === 'meta' && hasMeta) { renderMetaTrend(); renderCampChart(); } else if (view === 'ga' && hasGa) renderGaCharts(); } }, 150);
   });
 
   // ======================================================================
@@ -1247,10 +1359,250 @@ footer p { margin: 4px 0; }
     $('m-foot').textContent = fmtInt.format(rows.length) + (rows.length === 1 ? ' campanha' : ' campanhas') + ' com entrega no período';
   }
 
+  // ======================================================================
+  // Google Analytics
+  // ======================================================================
+  const GD = window.GA_DATA;
+  const hasGa = !!(GD && GD.daily && GD.daily.length);
+  let GF = null, GPRESETS = [], GLAST = 0, GEPOCH = null, GA = null;
+  const gSort = { pages: { key: 'views', dir: 'desc' }, landing: { key: 'sessions', dir: 'desc' }, products: { key: 'purchased', dir: 'desc' } };
+  const gExpanded = { pages: false, landing: false, products: false };
+  const gDayToDate = d => new Date(GEPOCH.getTime() + d * 864e5);
+  const gDateToDay = dt => Math.round((dt.getTime() - GEPOCH.getTime()) / 864e5);
+  const gMonthKey = d => { const dt = gDayToDate(d); return dt.getFullYear() * 12 + dt.getMonth(); };
+  const fmtDur = s => { s = Math.round(s || 0); if (s < 60) return s + ' s'; return Math.floor(s / 60) + ' min ' + String(s % 60).padStart(2, '0') + ' s'; };
+  const fmtDay = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' });
+  const fmtDayLong = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
+  const fmtDec = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const GT = {
+    pages: { unit: ['página', 'páginas'], cells: r => [fmtInt.format(r.views), fmtInt.format(r.users), fmtDur(r.avg), fmtPct.format(r.share)] },
+    landing: { unit: ['página de entrada', 'páginas de entrada'], cells: r => [fmtInt.format(r.sessions), fmtPct.format(r.engRate), fmtInt.format(r.purch), fmtPct2.format(r.conv), fmtBRL.format(r.rev)] },
+    products: { unit: ['produto', 'produtos'], cells: r => [fmtInt.format(r.viewed), fmtInt.format(r.carted), fmtInt.format(r.purchased), fmtPct2.format(r.conv), fmtBRL.format(r.rev)] },
+  };
+
+  function setupGa() {
+    $('g-setup').hidden = hasGa;
+    for (const id of ['g-filters', 'g-chips', 'g-kpis', 'g-row1', 'g-row2', 'g-row3']) $(id).hidden = !hasGa;
+    $('g-property').textContent = hasGa ? (GD.property || '—') : '—';
+    $('g-gen-date').textContent = hasGa ? fmtDate.format(new Date((GD.fetchedAt || GD.generatedAt) + 'T00:00:00')) : '—';
+    if (!hasGa) return;
+    GEPOCH = new Date(GD.epoch + 'T00:00:00'); GLAST = GD.days - 1;
+    const lastDate = gDayToDate(GLAST);
+    GF = { from: Math.max(0, GLAST - 29), to: GLAST, preset: '30d' };
+    GPRESETS = [['all', 'Todo o período', () => [0, GLAST]]];
+    for (let y = lastDate.getFullYear(); y >= GEPOCH.getFullYear() && GPRESETS.length < 3; y--) {
+      GPRESETS.push([String(y), String(y), () => [Math.max(0, gDateToDay(new Date(y, 0, 1))), Math.min(GLAST, gDateToDay(new Date(y, 11, 31)))]]);
+    }
+    GPRESETS.push(['mes', 'Mês atual', () => [Math.max(0, gDateToDay(new Date(lastDate.getFullYear(), lastDate.getMonth(), 1))), GLAST]],
+      ['90d', 'Últimos 90 dias', () => [Math.max(0, GLAST - 89), GLAST]], ['30d', 'Últimos 30 dias', () => [Math.max(0, GLAST - 29), GLAST]], ['7d', 'Últimos 7 dias', () => [Math.max(0, GLAST - 6), GLAST]]);
+    const p = $('g-presets');
+    for (const [key, label] of GPRESETS) {
+      const b = el('button', null, label); b.type = 'button'; b.dataset.key = key;
+      b.addEventListener('click', () => { const [a, z] = GPRESETS.find(x => x[0] === key)[2](); GF.from = a; GF.to = z; GF.preset = key; updateGa(); });
+      p.appendChild(b);
+    }
+    $('g-date-from').min = iso(GEPOCH); $('g-date-from').max = iso(lastDate); $('g-date-to').min = iso(GEPOCH); $('g-date-to').max = iso(lastDate);
+    $('g-date-from').addEventListener('change', e => { const d = e.target.valueAsDate; if (!d) return; GF.from = Math.min(Math.max(0, gDateToDay(new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))), GF.to); GF.preset = ''; updateGa(); });
+    $('g-date-to').addEventListener('change', e => { const d = e.target.valueAsDate; if (!d) return; GF.to = Math.max(Math.min(GLAST, gDateToDay(new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))), GF.from); GF.preset = ''; updateGa(); });
+    $('g-clear').addEventListener('click', () => { GF.from = Math.max(0, GLAST - 29); GF.to = GLAST; GF.preset = '30d'; updateGa(); });
+    for (const t of Object.keys(GT)) {
+      $('g-' + t + '-search').addEventListener('input', () => renderGaTable(t));
+      setupSort($('g-' + t + '-table'), v => { gSort[t] = v; renderGaTable(t); }, () => gSort[t]);
+      $('g-' + t + '-more').addEventListener('click', () => { gExpanded[t] = !gExpanded[t]; renderGaTable(t); });
+    }
+    updateGa();
+  }
+
+  function aggregateGa() {
+    const inRange = d => d >= GF.from && d <= GF.to;
+    const tot = { sessions: 0, users: 0, newUsers: 0, engaged: 0, engSec: 0, views: 0, carts: 0, checkouts: 0, purch: 0, rev: 0 };
+    const daily = GF.to - GF.from + 1 <= 92, buckets = new Map();
+    for (const r of GD.daily) {
+      const d = r[0]; if (!inRange(d)) continue;
+      tot.sessions += r[1]; tot.users += r[2]; tot.newUsers += r[3]; tot.engaged += r[4]; tot.engSec += r[5]; tot.views += r[6]; tot.carts += r[7]; tot.checkouts += r[8]; tot.purch += r[9]; tot.rev += r[10];
+      const k = daily ? d : gMonthKey(d); let b = buckets.get(k); if (!b) { b = { k, sessions: 0, users: 0, purch: 0, rev: 0 }; buckets.set(k, b); }
+      b.sessions += r[1]; b.users += r[2]; b.purch += r[9]; b.rev += r[10];
+    }
+    const dim = (rep, fields) => {
+      const m = new Map();
+      for (const r of rep.rows) { if (!inRange(r[0])) continue; let e = m.get(r[1]); if (!e) { e = { name: rep.names[r[1]], i: r[1] }; for (const f of fields) e[f] = 0; m.set(r[1], e); } fields.forEach((f, j) => { e[f] += r[2 + j]; }); }
+      return [...m.values()];
+    };
+    const sess = ['sessions', 'engaged', 'purch', 'rev'];
+    return { tot, buckets, daily, channels: dim(GD.channels, sess), sources: dim(GD.sources, sess), landing: dim(GD.landing, sess), devices: dim(GD.devices, sess),
+      regions: dim(GD.regions, sess), pages: dim(GD.pages, ['views', 'engSec', 'users']), products: dim(GD.products, ['viewed', 'carted', 'purchased', 'rev']) };
+  }
+
+  function updateGa() {
+    GA = aggregateGa();
+    $('g-presets').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.key === GF.preset)));
+    $('g-date-from').value = iso(gDayToDate(GF.from)); $('g-date-to').value = iso(gDayToDate(GF.to));
+    const chips = $('g-chips'); chips.replaceChildren();
+    if (GF.preset !== 'all') {
+      const c = el('span', 'chip'); c.append('Período: '); c.appendChild(el('b', null, fmtDate.format(gDayToDate(GF.from)) + ' – ' + fmtDate.format(gDayToDate(GF.to))));
+      const x = el('button', null, '×'); x.type = 'button'; x.setAttribute('aria-label', 'Remover filtro Período'); x.addEventListener('click', () => { GF.from = 0; GF.to = GLAST; GF.preset = 'all'; updateGa(); }); c.appendChild(x); chips.appendChild(c);
+    }
+    $('g-clear').hidden = GF.preset === '30d';
+    renderGaKpis(); renderGaCharts(); for (const t of Object.keys(GT)) renderGaTable(t); renderHeaderMeta();
+  }
+
+  function renderGaKpis() {
+    const t = GA.tot, n = GF.to - GF.from + 1;
+    const tiles = [
+      ['Sessões', fmtInt.format(t.sessions), n + ' dias · ' + fmtInt.format(Math.round(t.sessions / n)) + '/dia'],
+      ['Usuários', fmtInt.format(t.users), t.users ? fmtPct.format(t.newUsers / t.users) + ' novos · soma diária' : ''],
+      ['Visualizações de página', fmtInt.format(t.views), t.sessions ? fmtDec.format(t.views / t.sessions) + ' por sessão' : ''],
+      ['Taxa de engajamento', t.sessions ? fmtPct.format(t.engaged / t.sessions) : '—', fmtInt.format(t.engaged) + ' sessões engajadas'],
+      ['Tempo médio por sessão', t.sessions ? fmtDur(t.engSec / t.sessions) : '—', 'tempo de engajamento'],
+      ['Adições ao carrinho', fmtInt.format(t.carts), t.sessions ? fmtPct2.format(t.carts / t.sessions) + ' das sessões · ' + fmtInt.format(t.checkouts) + ' checkouts' : ''],
+      ['Compras (GA)', fmtInt.format(t.purch), t.sessions ? 'conversão ' + fmtPct2.format(t.purch / t.sessions) : ''],
+      ['Receita (GA)', fmtBRL.format(t.rev), t.purch ? 'ticket médio ' + fmtBRL2.format(t.rev / t.purch) : 'sem compras no recorte'],
+    ];
+    const k = $('g-kpis'); k.replaceChildren();
+    for (const [label, value, sub] of tiles) { const c = el('div', 'kpi'); c.append(el('div', 'eyebrow', label), el('div', 'kpi-value num', value), el('div', 'kpi-sub', sub)); k.appendChild(c); }
+  }
+
+  function renderGaCharts() {
+    renderGaTrend();
+    const convText = c => fmtInt.format(c.sessions) + (c.sessions ? ' · ' + fmtPct2.format(c.purch / c.sessions) : '');
+    const sessTip = c => [['Sessões', fmtInt.format(c.sessions)], ['Engajamento', c.sessions ? fmtPct.format(c.engaged / c.sessions) : '—'], ['Compras', fmtInt.format(c.purch)], ['Conversão', c.sessions ? fmtPct2.format(c.purch / c.sessions) : '—'], ['Receita', fmtBRL.format(c.rev)]];
+    const top = (list, n) => list.filter(x => x.sessions > 0).sort((a, b) => b.sessions - a.sessions).slice(0, n);
+    renderGaBars('g-channels', top(GA.channels, 12), { label: 'Sessões por canal', text: convText, tip: sessTip, padL: 150 });
+    renderGaBars('g-sources', top(GA.sources, 10), { label: 'Sessões por origem e mídia', text: convText, tip: sessTip, padL: 190 });
+    renderGaBars('g-devices', top(GA.devices, 4), { label: 'Sessões por dispositivo', text: convText, tip: sessTip, padL: 110 });
+    renderGaBars('g-regions', top(GA.regions, 10), { label: 'Sessões por estado', text: convText, tip: sessTip, padL: 190 });
+  }
+
+  function renderGaTrend() {
+    const host = $('g-trend'); host.querySelectorAll('svg').forEach(x => x.remove());
+    const tip = $('g-trend-tip'); tip.hidden = true;
+    const pts = [];
+    if (GA.daily) for (let d = GF.from; d <= GF.to; d++) pts.push(GA.buckets.get(d) || { k: d, sessions: 0, users: 0, purch: 0, rev: 0 });
+    else for (let m = gMonthKey(GF.from); m <= gMonthKey(GF.to); m++) pts.push(GA.buckets.get(m) || { k: m, sessions: 0, users: 0, purch: 0, rev: 0 });
+    $('g-trend-title').textContent = GA.daily ? 'Sessões por dia' : 'Sessões por mês';
+    $('g-trend-hint').textContent = pts.length + (GA.daily ? (pts.length === 1 ? ' dia' : ' dias') : (pts.length === 1 ? ' mês' : ' meses'));
+    const W = chartWidth(host), narrow = W < 560, H = narrow ? 200 : 240, padL = narrow ? 44 : 56, padR = 12, padT = 16, padB = 30;
+    const iw = W - padL - padR, ih = H - padT - padB;
+    const max = Math.max(...pts.map(x => x.sessions), 1);
+    const ticks = niceTicks(max, 4), yMax = ticks[ticks.length - 1];
+    const y = v => padT + ih - (Math.max(0, v) / yMax) * ih;
+    const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': $('g-trend-title').textContent });
+    for (const t of ticks) {
+      svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: y(t), y2: y(t), class: t === 0 ? 'baseline' : 'gridline' }));
+      const lab = svgEl('text', { x: padL - 8, y: y(t) + 3.5, 'text-anchor': 'end' }); lab.textContent = axisLabel(t); svg.appendChild(lab);
+    }
+    const n = pts.length, slot = iw / n, bw = Math.max(1.5, Math.min(28, slot - (slot > 6 ? 2 : 1)));
+    const labelEvery = Math.max(1, Math.ceil(n * (narrow ? 50 : 56) / iw));
+    const labelOf = p => GA.daily ? fmtDay.format(gDayToDate(p.k)) : fmtMonth.format(new Date(Math.floor(p.k / 12), p.k % 12, 1)).replace('.', '');
+    const bars = [];
+    pts.forEach((p, i) => {
+      const x = padL + i * slot + (slot - bw) / 2;
+      const b = svgEl('rect', { x, y: y(p.sessions), width: bw, height: Math.max(0, ih - (y(p.sessions) - padT)), rx: Math.min(3, bw / 2), class: 'bar' });
+      svg.appendChild(b); bars.push(b);
+      if (i % labelEvery === 0) { const lab = svgEl('text', { x: x + bw / 2, y: H - padB + 16, 'text-anchor': 'middle' }); lab.textContent = labelOf(p); svg.appendChild(lab); }
+    });
+    const cross = svgEl('line', { x1: 0, x2: 0, y1: padT, y2: padT + ih, class: 'crosshair', visibility: 'hidden' }); svg.appendChild(cross);
+    const hit = svgEl('rect', { x: padL, y: padT, width: iw, height: ih, class: 'hit' }); svg.appendChild(hit);
+    let hovered = null;
+    const move = e => {
+      const r = svg.getBoundingClientRect(); const px = (e.clientX - r.left) * (W / r.width);
+      const i = Math.max(0, Math.min(n - 1, Math.floor((px - padL) / slot)));
+      if (hovered !== null) bars[hovered].classList.remove('hover');
+      hovered = i; bars[i].classList.add('hover');
+      const cx = padL + i * slot + slot / 2; cross.setAttribute('x1', cx); cross.setAttribute('x2', cx); cross.setAttribute('visibility', 'visible');
+      const p = pts[i]; tip.replaceChildren();
+      tip.appendChild(el('div', 't-title', cap(GA.daily ? fmtDayLong.format(gDayToDate(p.k)) : fmtMonthLong.format(new Date(Math.floor(p.k / 12), p.k % 12, 1)))));
+      const row = (a, b) => { const q = el('div', 't-row'); q.append(el('span', null, a), el('span', null, b)); tip.appendChild(q); };
+      row('Sessões', fmtInt.format(p.sessions)); row('Usuários', fmtInt.format(p.users)); row('Compras', fmtInt.format(p.purch));
+      row('Conversão', p.sessions ? fmtPct2.format(p.purch / p.sessions) : '—'); row('Receita', fmtBRL.format(p.rev));
+      tip.hidden = false;
+      const hr = host.getBoundingClientRect();
+      const tx = cx * (r.width / W) + (r.left - hr.left);
+      const tw = tip.offsetWidth; tip.style.left = Math.max(tw / 2, Math.min(hr.width - tw / 2, tx)) + 'px';
+      tip.style.top = (y(p.sessions) * (r.height / H) + (r.top - hr.top)) + 'px';
+      tip.style.transform = y(p.sessions) < 90 ? 'translate(-50%, 12px)' : 'translate(-50%, calc(-100% - 10px))';
+    };
+    hit.addEventListener('pointermove', move); hit.addEventListener('pointerenter', move);
+    hit.addEventListener('pointerleave', () => { tip.hidden = true; cross.setAttribute('visibility', 'hidden'); if (hovered !== null) bars[hovered].classList.remove('hover'); hovered = null; });
+    host.insertBefore(svg, tip);
+  }
+
+  function renderGaBars(hostId, list, opts) {
+    const host = $(hostId); host.querySelectorAll('svg, .empty').forEach(x => x.remove());
+    const tip = host.querySelector('.tooltip'); tip.hidden = true;
+    if (!list.length) { host.insertBefore(el('div', 'empty', 'Sem dados neste recorte.'), tip); return; }
+    const W = chartWidth(host), narrow = W < 560;
+    const rowH = narrow ? 42 : 26, padL = narrow ? 0 : opts.padL, padR = narrow ? 118 : 118, padT = 4;
+    const H = padT + list.length * rowH + 4, iw = W - padL - padR;
+    const max = Math.max(...list.map(x => x.sessions), 1);
+    const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': opts.label });
+    list.forEach((c, i) => {
+      const y = padT + i * rowH;
+      const g = svgEl('g', { class: 'hrow static', tabindex: '0' });
+      g.appendChild(svgEl('rect', { x: 0, y, width: W, height: rowH, fill: 'transparent' }));
+      const w = Math.max(2, c.sessions / max * iw), txt = opts.text(c);
+      if (narrow) {
+        const lab = svgEl('text', { x: 0, y: y + 14, class: 'cat-label' }); lab.textContent = truncate(c.name, Math.floor(W / 7.2)); g.appendChild(lab);
+        g.appendChild(svgEl('rect', { x: 0, y: y + 22, width: w, height: 12, rx: 4, class: 'hbar' }));
+        const v = svgEl('text', { x: w + 8, y: y + 32, class: 'dlabel' }); v.textContent = txt; g.appendChild(v);
+      } else {
+        const lab = svgEl('text', { x: padL - 10, y: y + rowH / 2 + 4, 'text-anchor': 'end', class: 'cat-label' }); lab.textContent = truncate(c.name, Math.floor(padL / 6.6)); g.appendChild(lab);
+        g.appendChild(svgEl('rect', { x: padL, y: y + 5, width: w, height: rowH - 10, rx: 4, class: 'hbar' }));
+        const v = svgEl('text', { x: padL + w + 8, y: y + rowH / 2 + 4, class: 'dlabel' }); v.textContent = txt; g.appendChild(v);
+      }
+      const show = e => {
+        tip.replaceChildren(); tip.appendChild(el('div', 't-title', c.name));
+        for (const [a, b] of opts.tip(c)) { const q = el('div', 't-row'); q.append(el('span', null, a), el('span', null, b)); tip.appendChild(q); }
+        positionTip(tip, host, e, g);
+      };
+      g.addEventListener('pointermove', show); g.addEventListener('pointerenter', show); g.addEventListener('focus', () => show(null));
+      g.addEventListener('pointerleave', () => { tip.hidden = true; }); g.addEventListener('blur', () => { tip.hidden = true; });
+      svg.appendChild(g);
+    });
+    host.insertBefore(svg, tip);
+  }
+
+  function gaTableRows(t) {
+    if (t === 'pages') {
+      const total = GA.pages.reduce((a, p) => a + p.views, 0);
+      return GA.pages.filter(p => p.views > 0).map(p => ({ name: GD.pages.titles[p.i] || p.name, path: p.name, views: p.views, users: p.users, avg: p.views ? p.engSec / p.views : 0, share: total ? p.views / total : 0 }));
+    }
+    if (t === 'landing') return GA.landing.filter(p => p.sessions > 0).map(p => ({ name: p.name, sessions: p.sessions, engRate: p.sessions ? p.engaged / p.sessions : 0, purch: p.purch, conv: p.sessions ? p.purch / p.sessions : 0, rev: p.rev }));
+    return GA.products.filter(p => p.viewed > 0 || p.purchased > 0).map(p => ({ name: p.name, viewed: p.viewed, carted: p.carted, purchased: p.purchased, conv: p.viewed ? p.purchased / p.viewed : 0, rev: p.rev }));
+  }
+
+  function renderGaTable(t) {
+    const q = $('g-' + t + '-search').value.trim().toLowerCase();
+    let rows = gaTableRows(t);
+    if (q) rows = rows.filter(r => r.name.toLowerCase().includes(q) || (r.path || '').toLowerCase().includes(q));
+    sortRows(rows, gSort[t]);
+    const table = $('g-' + t + '-table'), tbody = table.querySelector('tbody'); tbody.replaceChildren();
+    applySortMarks(table, gSort[t]);
+    const LIMIT = 12, shown = gExpanded[t] ? rows : rows.slice(0, LIMIT);
+    for (const r of shown) {
+      const tr = el('tr');
+      const nameTd = cell('', false); nameTd.className = 'clip'; nameTd.title = r.path && r.path !== r.name ? r.name + ' · ' + r.path : r.name;
+      nameTd.appendChild(el('span', 'clip-text', r.name)); if (r.path && r.path !== r.name) nameTd.appendChild(el('span', 'sub-line', r.path));
+      tr.appendChild(nameTd);
+      for (const c of GT[t].cells(r)) tr.appendChild(cell(c));
+      tbody.appendChild(tr);
+    }
+    if (!rows.length) { const tr = el('tr'); const td = el('td', 'empty', 'Nada neste recorte.'); td.colSpan = 6; tr.appendChild(td); tbody.appendChild(tr); }
+    const [one, many] = GT[t].unit;
+    $('g-' + t + '-foot').textContent = fmtInt.format(rows.length) + ' ' + (rows.length === 1 ? one : many) + (rows.length > LIMIT && !gExpanded[t] ? ' · mostrando ' + LIMIT : '');
+    const more = $('g-' + t + '-more'); more.hidden = rows.length <= LIMIT; more.textContent = gExpanded[t] ? 'Mostrar menos' : 'Mostrar todas';
+  }
+
   // ---------- abas ----------
+  const VIEWS = ['sales', 'meta', 'ga'];
+  const viewFromHash = () => VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'sales';
   let view = 'sales';
   function renderHeaderMeta() {
-    if (view === 'meta') {
+    if (view === 'ga') {
+      document.querySelector('.top .eyebrow').textContent = 'Google Analytics · site';
+      if (hasGa) $('meta').replaceChildren(el('div', null, fmtDate.format(gDayToDate(GF.from)) + ' – ' + fmtDate.format(gDayToDate(GF.to))), el('div', null, 'Propriedade GA4 ' + (GD.property || '')));
+      else $('meta').replaceChildren(el('div', null, 'Não conectado'));
+    } else if (view === 'meta') {
       document.querySelector('.top .eyebrow').textContent = 'Meta Ads · campanhas';
       if (hasMeta) $('meta').replaceChildren(el('div', null, fmtDate.format(mDayToDate(MF.from)) + ' – ' + fmtDate.format(mDayToDate(MF.to))), el('div', null, MF.camp >= 0 ? MD.campaigns[MF.camp].name : 'Todas as campanhas'));
       else $('meta').replaceChildren(el('div', null, 'Não conectado'));
@@ -1262,19 +1614,21 @@ footer p { margin: 4px 0; }
   function showView(v) {
     view = v;
     document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.view === v)));
-    $('view-sales').hidden = v !== 'sales'; $('view-meta').hidden = v !== 'meta';
+    for (const x of VIEWS) $('view-' + x).hidden = v !== x;
     if (v === 'meta' && hasMeta) { renderMetaTrend(); renderCampChart(); }   // largura só existe com a aba visível
+    if (v === 'ga' && hasGa) renderGaCharts();
     renderHeaderMeta();
     if (location.hash !== '#' + v) history.replaceState(null, '', v === 'sales' ? location.pathname + location.search : '#' + v);
   }
   document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
-  window.addEventListener('hashchange', () => showView(location.hash === '#meta' ? 'meta' : 'sales'));
+  window.addEventListener('hashchange', () => showView(viewFromHash()));
 
   // ---------- boot ----------
   buildControls();
   buildMap();
   update();
   setupMeta();
-  showView(location.hash === '#meta' ? 'meta' : 'sales');
+  setupGa();
+  showView(viewFromHash());
 })();
 </script>
