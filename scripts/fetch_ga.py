@@ -28,6 +28,7 @@ Uso:
     python3 scripts/fetch_ga.py [--since 2025-01-01] [--until 2026-09-30] [--out data/ga/analytics.json]
 """
 import argparse
+import base64
 import json
 import os
 import sys
@@ -54,13 +55,35 @@ REPORTS = {
 OTHER = "(outros)"
 
 
+def service_account_info(raw):
+    """Aceita o conteúdo do JSON da chave, o mesmo JSON em base64 ou o caminho do arquivo."""
+    s = (raw or "").strip().lstrip("\ufeff")
+    if s and len(s) < 4096 and os.path.isfile(s):
+        s = open(s, encoding="utf-8").read().strip().lstrip("\ufeff")
+    if not s.startswith("{"):
+        try:
+            s = base64.b64decode(s, validate=False).decode("utf-8").strip().lstrip("\ufeff")
+        except (ValueError, UnicodeDecodeError):
+            pass
+    try:
+        info = json.loads(s)
+    except ValueError:
+        sys.exit("GA_SERVICE_ACCOUNT_JSON não é um JSON válido: cole o conteúdo inteiro do arquivo de chave da "
+                 "conta de serviço (começa com '{' e tem \"type\": \"service_account\"), ou esse conteúdo em base64. "
+                 f"Recebido: {len(s)} caracteres começando com {s[:1]!r}.")
+    if info.get("type") != "service_account" or not info.get("private_key"):
+        sys.exit("GA_SERVICE_ACCOUNT_JSON não é uma chave de conta de serviço (falta \"type\": \"service_account\" "
+                 "ou \"private_key\"). Gere a chave em Google Cloud → IAM → Contas de serviço → Chaves → Adicionar chave (JSON).")
+    return info
+
+
 def access_token(sa_json):
     try:
         from google.oauth2 import service_account
         from google.auth.transport.requests import Request
     except ImportError:
         sys.exit("instale as dependências: pip install google-auth requests")
-    info = json.loads(sa_json)
+    info = service_account_info(sa_json)
     creds = service_account.Credentials.from_service_account_info(
         info, scopes=["https://www.googleapis.com/auth/analytics.readonly"])
     creds.refresh(Request())

@@ -103,7 +103,9 @@ Configuração (uma vez):
 2. No Google Analytics, em Administrador → Gerenciamento de acesso à propriedade, adicione o e-mail
    da conta de serviço (termina em `iam.gserviceaccount.com`) com a função *Leitor*.
 3. No GitHub, em Settings → Secrets and variables → Actions, crie o segredo
-   `GA_SERVICE_ACCOUNT_JSON` com o conteúdo inteiro do arquivo JSON e, na aba *Variables*, a
+   `GA_SERVICE_ACCOUNT_JSON` com o conteúdo inteiro do arquivo JSON (abra o arquivo num editor de
+   texto, selecione tudo e cole; começa com `{` e termina com `}`; também vale o mesmo conteúdo em
+   base64) e, na aba *Variables*, a
    variável `GA_PROPERTY_ID` com o id numérico da propriedade GA4 (Administrador → Detalhes da
    propriedade).
 4. Para carregar o histórico, rode o workflow à mão em Actions → *Atualizar e publicar dashboard*
