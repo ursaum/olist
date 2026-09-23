@@ -48,7 +48,7 @@ def main():
         campaigns = []
         for cid in ids:
             m = meta.get(cid, {})
-            campaigns.append({"name": m.get("name") or cid,
+            campaigns.append({"id": cid, "name": m.get("name") or cid,
                               "objective": OBJECTIVE_LABELS.get(m.get("objective", ""), m.get("objective") or "—"),
                               "status": STATUS_LABELS.get(m.get("status", ""), m.get("status") or "—")})
         if rows:

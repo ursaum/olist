@@ -142,6 +142,14 @@ Com eles, `scripts/fetch_shopify.py` acumula os pedidos dos últimos 58 dias em
 > são substituídos por identificadores opacos e nenhum dado de cliente entra nos arquivos.
 > No plano gratuito do GitHub, o Pages só funciona em repositórios públicos.
 
+### Comportamento do dashboard
+
+- As três abas abrem com o período **Mês atual** (do dia 1º do mês do dado mais recente até ele).
+- Na aba Vendas, abaixo dos indicadores, o totalizador separa **Shopify** e **Mercado Livre**
+  (receita líquida, pedidos, ticket e participação); clicar num deles filtra o dashboard.
+- A cada publicação o workflow acrescenta `?v=<data-hora>` aos scripts de dados, para o navegador
+  não mostrar uma versão antiga guardada em cache.
+
 ## Estrutura
 
 ```

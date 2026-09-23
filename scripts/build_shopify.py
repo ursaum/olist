@@ -45,6 +45,9 @@ CHANNEL_LABELS = {
 }
 
 
+MARKETPLACE_ORDERS = set()     # pedidos vindos de marketplaces via Olist (não da Shopify)
+
+
 def load(paths):
     """Carrega as extrações. Arquivos com "priority" maior (ex.: atualização mensal) substituem
     as linhas vindas de arquivos de prioridade menor: pedido a pedido e, se o arquivo declarar
@@ -56,6 +59,9 @@ def load(paths):
             table = d["strings"]
             d["rows"] = [[table[v] if isinstance(v, int) and not isinstance(v, bool) and i < 9 else v
                           for i, v in enumerate(r)] for r in d["rows"]]
+        if str(d.get("source", "")).startswith("olist"):
+            c0 = [x["name"] for x in d["columns"]].index("order_name")
+            MARKETPLACE_ORDERS.update(r[c0] for r in d["rows"])
         files.append((int(d.get("priority", 1)), p, d))
     files.sort(key=lambda f: (f[0], f[1]))
     rows, level_files, level = [], [], None
@@ -119,7 +125,7 @@ def main():
     cities, city_idx = [], {}
     products, product_idx = [], {}
     types, type_idx = [], {}
-    channels, channel_idx = [], {}
+    channels, channel_idx, channel_group = [], {}, []
     order_idx = {}
 
     agg = defaultdict(lambda: [0, 0.0, 0.0, 0.0, 0.0, 0.0])  # items, gross, discounts, returns, net, shipping
@@ -160,6 +166,8 @@ def main():
         if ch not in channel_idx:
             channel_idx[ch] = len(channels)
             channels.append(ch)
+            # plataforma de origem: marketplace (nome do canal no Olist) ou Shopify
+            channel_group.append(ch if r[ix["order_name"]] in MARKETPLACE_ORDERS else "Shopify")
         oname = r[ix["order_name"]]
         if oname not in order_idx:
             order_idx[oname] = len(order_idx)
@@ -191,6 +199,7 @@ def main():
         "products": products,
         "types": types,
         "channels": channels,
+        "channelGroups": channel_group,
         "columns": ["order", "day", "state", "city", "product", "type", "channel", "items", "net", "shipping", "gross", "discounts", "returns"],
         "notes": "product/type = -1 em linhas só de frete",
         "rows": rows,

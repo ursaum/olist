@@ -214,6 +214,18 @@ button, select, input { font: inherit; color: inherit; }
 .kpi-value { font-size: clamp(20px, 2vw, 26px); font-weight: 700; font-stretch: 87.5%; letter-spacing: -.02em; line-height: 1.1; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kpi-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* ---------- totalizador por plataforma ---------- */
+.platforms { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin: -4px 0 14px; }
+.platform { background: var(--surface); border: 1px solid var(--hairline); border-radius: 10px; padding: 12px 14px; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: baseline; min-width: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.platform:hover { border-color: var(--accent); }
+.platform[aria-pressed="true"] { border-color: var(--select); box-shadow: inset 0 0 0 1px var(--select); }
+.platform .p-name { font-weight: 700; font-size: 14px; }
+.platform .p-share { color: var(--muted); font-size: 12px; text-align: right; }
+.platform .p-value { font-size: clamp(20px, 2vw, 24px); font-weight: 700; font-stretch: 87.5%; letter-spacing: -.02em; }
+.platform .p-sub { color: var(--muted); font-size: 12px; text-align: right; }
+.platform .p-bar { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--grid); overflow: hidden; margin-top: 4px; }
+.platform .p-bar i { display: block; height: 100%; background: var(--bar); }
+
 /* ---------- cards / grid ---------- */
 .grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 14px; margin-bottom: 14px; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
@@ -418,6 +430,7 @@ footer p { margin: 4px 0; }
 <div class="chips" id="chips"></div>
 
 <section class="kpis" id="kpis" aria-label="Indicadores"></section>
+<section class="platforms" id="platforms" aria-label="Vendas por plataforma"></section>
 
 <section class="grid">
   <div class="card">
@@ -664,6 +677,8 @@ footer p { margin: 4px 0; }
   const ROWS = D.rows;
   const C = { order: 0, day: 1, state: 2, city: 3, product: 4, type: 5, channel: 6, items: 7, net: 8, ship: 9, gross: 10, disc: 11, ret: 12 };
   const EPOCH = new Date(D.epoch + 'T00:00:00');
+  const CHANNEL_GROUP = D.channels.map((c, i) => (D.channelGroups && D.channelGroups[i]) || 'Shopify');
+  const PLATFORMS = [...new Set(CHANNEL_GROUP)].sort((a, b) => (a === 'Shopify' ? -1 : b === 'Shopify' ? 1 : a.localeCompare(b, 'pt-BR')));
   const NORDERS = ROWS.reduce((m, r) => Math.max(m, r[C.order]), 0) + 1;
   const STATE_BY_UF = Object.fromEntries(D.states.map((s, i) => [s.uf, i]));
   const REGION_NAME = Object.fromEntries(D.regions.map(r => [r.code, r.name]));
@@ -691,7 +706,8 @@ footer p { margin: 4px 0; }
   // ---------- estado dos filtros ----------
   const LAST = D.days - 1;
   const LAST_DATE = dayToDate(LAST);
-  const DEFAULTS = { from: 0, to: LAST, preset: 'all', region: '', state: -1, city: -1, type: -1, product: -1, channel: -1 };
+  const MONTH_START = Math.max(0, dateToDay(new Date(LAST_DATE.getFullYear(), LAST_DATE.getMonth(), 1)));
+  const DEFAULTS = { from: MONTH_START, to: LAST, preset: 'mes', region: '', state: -1, city: -1, type: -1, product: -1, channel: -1, platform: '' };
   const F = { ...DEFAULTS };
   const PRESETS = [['all', 'Todo o período', () => [0, LAST]]];
   for (let y = LAST_DATE.getFullYear(); y >= EPOCH.getFullYear() && PRESETS.length < 4; y--) {
@@ -702,6 +718,8 @@ footer p { margin: 4px 0; }
 
   const $ = id => document.getElementById(id);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  // na barra de períodos que rola na horizontal (celular), deixa o botão ativo à vista
+  const revealPreset = box => { const b = box.querySelector('[aria-pressed="true"]'); if (b && box.scrollWidth > box.clientWidth) box.scrollLeft = Math.max(0, b.offsetLeft - box.offsetLeft - 8); };
   const svgEl = (tag, attrs) => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
 
   // ---------- agregação ----------
@@ -711,6 +729,7 @@ footer p { margin: 4px 0; }
     const byState = D.states.map(() => ({ rev: 0, items: 0, orders: 0 }));
     const byCity = new Map(), byProduct = new Map(), byType = new Map(), byMonth = new Map(), byRegion = new Map();
     const tot = { rev: 0, gross: 0, disc: 0, ret: 0, ship: 0, items: 0, orders: 0 };
+    const byGroup = new Map(PLATFORMS.map(g => [g, { rev: 0, orders: 0, items: 0 }]));
     const stateInRegion = D.states.map(s => !F.region || s.region === F.region);
     for (let i = 0; i < ROWS.length; i++) {
       const r = ROWS[i];
@@ -723,8 +742,10 @@ footer p { margin: 4px 0; }
       if (F.type >= 0 && r[C.type] !== F.type) continue;
       if (F.product >= 0 && r[C.product] !== F.product) continue;
       if (F.channel >= 0 && r[C.channel] !== F.channel) continue;
+      if (F.platform && CHANNEL_GROUP[r[C.channel]] !== F.platform) continue;
       const rev = r[C.net], items = r[C.items], o = r[C.order];
       const newOrder = seen[o] === 0; if (newOrder) seen[o] = 1;
+      const g = byGroup.get(CHANNEL_GROUP[r[C.channel]]); g.rev += rev; g.items += items; if (newOrder) g.orders++;
       tot.rev += rev; tot.gross += r[C.gross]; tot.disc += r[C.disc]; tot.ret += r[C.ret]; tot.ship += r[C.ship]; tot.items += items; if (newOrder) tot.orders++;
       if (s >= 0) { const st = byState[s]; st.rev += rev; st.items += items; if (newOrder) st.orders++; }
       bump(byCity, r[C.city], rev, items, o);
@@ -732,7 +753,7 @@ footer p { margin: 4px 0; }
       bump(byMonth, monthKey(day), rev, items, o);
       bump(byRegion, s >= 0 ? D.states[s].region : 'X', rev, items, o);
     }
-    return { tot, byState, byCity, byProduct, byType, byMonth, byRegion };
+    return { tot, byState, byCity, byProduct, byType, byMonth, byRegion, byGroup };
   }
   function bump(map, key, rev, items, o) {
     let e = map.get(key);
@@ -792,6 +813,7 @@ footer p { margin: 4px 0; }
 
   function syncControls() {
     $('presets').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.key === F.preset)));
+    revealPreset($('presets'));
     $('date-from').value = iso(dayToDate(F.from)); $('date-to').value = iso(dayToDate(F.to));
     $('f-region').value = F.region;
     const stateOpts = [[-1, F.region ? 'Todos os estados da região' : 'Todos os estados'], ...D.states.map((s, i) => [i, s.uf + ' · ' + s.name]).filter(([i]) => !F.region || D.states[i].region === F.region)];
@@ -821,6 +843,7 @@ footer p { margin: 4px 0; }
     if (F.type >= 0) chip('Tipo', D.types[F.type], () => { F.type = -1; F.product = -1; });
     if (F.product >= 0) chip('Produto', D.products[F.product], () => { F.product = -1; });
     if (F.channel >= 0) chip('Canal', D.channels[F.channel], () => { F.channel = -1; });
+    if (F.platform) chip('Plataforma', F.platform, () => { F.platform = ''; });
   }
 
   // ---------- render ----------
@@ -867,6 +890,25 @@ footer p { margin: 4px 0; }
     ];
     const k = $('kpis'); k.replaceChildren();
     for (const [label, value, sub] of tiles) { const c = el('div', 'kpi'); c.append(el('div', 'eyebrow', label), el('div', 'kpi-value num', value), el('div', 'kpi-sub', sub)); k.appendChild(c); }
+    renderPlatforms();
+  }
+
+  // totalizador por plataforma (Shopify x marketplaces); clique filtra
+  function renderPlatforms() {
+    const wrap = $('platforms'); wrap.replaceChildren();
+    wrap.hidden = PLATFORMS.length < 2;
+    const total = [...A.byGroup.values()].reduce((a, g) => a + g.rev, 0);
+    for (const name of PLATFORMS) {
+      const g = A.byGroup.get(name), share = total > 0 ? g.rev / total : 0;
+      const b = el('button', 'platform'); b.type = 'button'; b.setAttribute('aria-pressed', String(F.platform === name));
+      b.title = F.platform === name ? 'Mostrar todas as plataformas' : 'Filtrar só ' + name;
+      const bar = el('div', 'p-bar'); const fill = el('i'); fill.style.width = (share * 100) + '%'; bar.appendChild(fill);
+      b.append(el('span', 'p-name', name), el('span', 'p-share num', total > 0 ? fmtPct.format(share) + ' da receita' : '—'),
+        el('span', 'p-value num', fmtBRL.format(g.rev)),
+        el('span', 'p-sub num', fmtInt.format(g.orders) + (g.orders === 1 ? ' pedido' : ' pedidos') + (g.orders ? ' · ticket ' + fmtBRL.format(g.rev / g.orders) : '')), bar);
+      b.addEventListener('click', () => { F.platform = F.platform === name ? '' : name; update(); });
+      wrap.appendChild(b);
+    }
   }
 
   // ----- mapa -----
@@ -1171,7 +1213,8 @@ footer p { margin: 4px 0; }
     if (!hasMeta) return;
     MEPOCH = new Date(MD.epoch + 'T00:00:00'); MLAST = MD.days - 1;
     const lastDate = mDayToDate(MLAST);
-    MF = { from: Math.max(0, MLAST - 29), to: MLAST, preset: '30d', camp: -1, status: '' };
+    const mMonthStart = Math.max(0, mDateToDay(new Date(lastDate.getFullYear(), lastDate.getMonth(), 1)));
+    MF = { from: mMonthStart, to: MLAST, preset: 'mes', camp: -1, status: '' };
     MPRESETS = [['all', 'Todo o período', () => [0, MLAST]]];
     for (let y = lastDate.getFullYear(); y >= MEPOCH.getFullYear() && MPRESETS.length < 3; y--) {
       MPRESETS.push([String(y), String(y), () => [Math.max(0, mDateToDay(new Date(y, 0, 1))), Math.min(MLAST, mDateToDay(new Date(y, 11, 31)))]]);
@@ -1192,7 +1235,7 @@ footer p { margin: 4px 0; }
     fillSelect($('m-status'), [['', 'Todos os status'], ...statuses.map(st => [st, st])], '');
     $('m-campaign').addEventListener('change', e => { MF.camp = +e.target.value; updateMeta(); });
     $('m-status').addEventListener('change', e => { MF.status = e.target.value; updateMeta(); });
-    $('m-clear').addEventListener('click', () => { MF.camp = -1; MF.status = ''; MF.from = Math.max(0, MLAST - 29); MF.to = MLAST; MF.preset = '30d'; updateMeta(); });
+    $('m-clear').addEventListener('click', () => { MF.camp = -1; MF.status = ''; MF.from = mMonthStart; MF.to = MLAST; MF.preset = 'mes'; updateMeta(); });
     $('m-search').addEventListener('input', renderCampTable);
     setupSort($('camp-table'), v => { campSort = v; renderCampTable(); }, () => campSort);
     setupSort($('m-prod-table'), v => { mpSort = v; renderMetaProducts(); }, () => mpSort);
@@ -1228,6 +1271,7 @@ footer p { margin: 4px 0; }
   function updateMeta() {
     MA = aggregateMeta();
     $('m-presets').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.key === MF.preset)));
+    revealPreset($('m-presets'));
     $('m-date-from').value = iso(mDayToDate(MF.from)); $('m-date-to').value = iso(mDayToDate(MF.to));
     $('m-campaign').value = String(MF.camp); $('m-status').value = MF.status;
     const chips = $('m-chips'); chips.replaceChildren();
@@ -1235,7 +1279,7 @@ footer p { margin: 4px 0; }
     if (MF.preset !== 'all') chip('Período', fmtDate.format(mDayToDate(MF.from)) + ' – ' + fmtDate.format(mDayToDate(MF.to)), () => { MF.from = 0; MF.to = MLAST; MF.preset = 'all'; });
     if (MF.camp >= 0) chip('Campanha', MD.campaigns[MF.camp].name, () => { MF.camp = -1; });
     if (MF.status) chip('Status', MF.status, () => { MF.status = ''; });
-    $('m-clear').hidden = !(MF.camp >= 0 || MF.status || MF.preset !== '30d');
+    $('m-clear').hidden = !(MF.camp >= 0 || MF.status || MF.preset !== 'mes');
     renderMetaKpis(); renderMetaTrend(); renderCampChart(); renderCampTable(); renderMetaProducts(); renderHeaderMeta();
   }
 
@@ -1252,15 +1296,17 @@ footer p { margin: 4px 0; }
     const shift = Math.round((gEpoch.getTime() - MEPOCH.getTime()) / 864e5);   // dia do GA -> dia do Meta
     const isMeta = GP.sources.map(x => META_SOURCE.test(x));
     const selected = MF.camp >= 0 ? normName(MD.campaigns[MF.camp].name) : null;
-    const campNorm = GP.campaigns.map(normName);
+    const byId = new Map(MD.campaigns.filter(c => c.id).map(c => [String(c.id), c.name]));
+    const campName = GP.campaigns.map(c => byId.get(String(c).trim()) || c);
+    const campNorm = campName.map(normName);
     const known = new Set(MD.campaigns.map(c => normName(c.name)));
     const agg = new Map(); let total = 0, purchases = 0, tagged = 0;
     for (const r of GP.rows) {
       const d = r[0] + shift;
       if (d < MF.from || d > MF.to || !isMeta[r[2]]) continue;
       if (selected !== null && campNorm[r[1]] !== selected) continue;
-      const k = r[3] + '\u0000' + r[1];
-      let e = agg.get(k); if (!e) { e = { name: GP.products[r[3]], campaign: GP.campaigns[r[1]], purchased: 0, rev: 0 }; agg.set(k, e); }
+      const k = r[3] + '\u0000' + campNorm[r[1]];
+      let e = agg.get(k); if (!e) { e = { name: GP.products[r[3]], campaign: campName[r[1]], purchased: 0, rev: 0 }; agg.set(k, e); }
       e.purchased += r[4]; e.rev += r[5]; purchases += r[4]; total += r[5];
       if (known.has(campNorm[r[1]])) tagged += r[4];
     }
@@ -1448,7 +1494,8 @@ footer p { margin: 4px 0; }
     if (!hasGa) return;
     GEPOCH = new Date(GD.epoch + 'T00:00:00'); GLAST = GD.days - 1;
     const lastDate = gDayToDate(GLAST);
-    GF = { from: Math.max(0, GLAST - 29), to: GLAST, preset: '30d' };
+    const gMonthStart = Math.max(0, gDateToDay(new Date(lastDate.getFullYear(), lastDate.getMonth(), 1)));
+    GF = { from: gMonthStart, to: GLAST, preset: 'mes' };
     GPRESETS = [['all', 'Todo o período', () => [0, GLAST]]];
     for (let y = lastDate.getFullYear(); y >= GEPOCH.getFullYear() && GPRESETS.length < 3; y--) {
       GPRESETS.push([String(y), String(y), () => [Math.max(0, gDateToDay(new Date(y, 0, 1))), Math.min(GLAST, gDateToDay(new Date(y, 11, 31)))]]);
@@ -1464,7 +1511,7 @@ footer p { margin: 4px 0; }
     $('g-date-from').min = iso(GEPOCH); $('g-date-from').max = iso(lastDate); $('g-date-to').min = iso(GEPOCH); $('g-date-to').max = iso(lastDate);
     $('g-date-from').addEventListener('change', e => { const d = e.target.valueAsDate; if (!d) return; GF.from = Math.min(Math.max(0, gDateToDay(new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))), GF.to); GF.preset = ''; updateGa(); });
     $('g-date-to').addEventListener('change', e => { const d = e.target.valueAsDate; if (!d) return; GF.to = Math.max(Math.min(GLAST, gDateToDay(new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))), GF.from); GF.preset = ''; updateGa(); });
-    $('g-clear').addEventListener('click', () => { GF.from = Math.max(0, GLAST - 29); GF.to = GLAST; GF.preset = '30d'; updateGa(); });
+    $('g-clear').addEventListener('click', () => { GF.from = gMonthStart; GF.to = GLAST; GF.preset = 'mes'; updateGa(); });
     for (const t of Object.keys(GT)) {
       $('g-' + t + '-search').addEventListener('input', () => renderGaTable(t));
       setupSort($('g-' + t + '-table'), v => { gSort[t] = v; renderGaTable(t); }, () => gSort[t]);
@@ -1496,13 +1543,14 @@ footer p { margin: 4px 0; }
   function updateGa() {
     GA = aggregateGa();
     $('g-presets').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.key === GF.preset)));
+    revealPreset($('g-presets'));
     $('g-date-from').value = iso(gDayToDate(GF.from)); $('g-date-to').value = iso(gDayToDate(GF.to));
     const chips = $('g-chips'); chips.replaceChildren();
     if (GF.preset !== 'all') {
       const c = el('span', 'chip'); c.append('Período: '); c.appendChild(el('b', null, fmtDate.format(gDayToDate(GF.from)) + ' – ' + fmtDate.format(gDayToDate(GF.to))));
       const x = el('button', null, '×'); x.type = 'button'; x.setAttribute('aria-label', 'Remover filtro Período'); x.addEventListener('click', () => { GF.from = 0; GF.to = GLAST; GF.preset = 'all'; updateGa(); }); c.appendChild(x); chips.appendChild(c);
     }
-    $('g-clear').hidden = GF.preset === '30d';
+    $('g-clear').hidden = GF.preset === 'mes';
     renderGaKpis(); renderGaCharts(); for (const t of Object.keys(GT)) renderGaTable(t); renderHeaderMeta();
   }
 

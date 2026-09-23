@@ -136,6 +136,10 @@ jobs:
         run: |
           cd dashboard
           touch .nojekyll
+          # força o navegador a baixar os dados novos a cada publicação (o Pages guarda cache por 10 min)
+          v=$(date -u +%Y%m%d%H%M)
+          sed -i -E "s#<script src=\"(br-map|data|meta|ga)\.js\"></script>#<script src=\"\1.js?v=$v\"></script>#g" index.html
+          grep -c "js?v=$v" index.html
           git init -q -b gh-pages
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
