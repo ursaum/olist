@@ -92,7 +92,12 @@ além das páginas mais acessadas (com tempo médio), páginas de entrada, produ
 e comprados, canais, origem/mídia, dispositivos e estados. A cada execução o workflow roda
 `scripts/fetch_ga.py`: busca na Google Analytics Data API os últimos 60 dias, por dia, e substitui
 esses dias em `data/ga/analytics.json`. Para páginas, origens, produtos e páginas de entrada só
-entram os maiores da janela (200, 40, 300 e 100); o resto vai para "(outros)".
+entram os maiores da janela (400, 60, 500 e 150; produtos ordenados por compras e depois por
+visualizações); o resto vai para "(outros)". O GA também alimenta, na aba Meta Ads, a tabela
+"Produtos vendidos pelas campanhas": compras no site em sessões com origem paga do Meta (ig, fb,
+facebook ou instagram com mídia cpc/paid), agrupadas pelo `utm_campaign` do anúncio, que precisa
+ser igual ao nome da campanha no Meta para o filtro de campanha funcionar (use
+`utm_campaign={{campaign.name}}` nos parâmetros de URL dos anúncios).
 Enquanto a conta de serviço não estiver configurada, a aba mostra o passo a passo abaixo.
 
 Configuração (uma vez):

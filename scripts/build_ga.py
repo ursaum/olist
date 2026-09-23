@@ -62,6 +62,19 @@ def encode(rep, epoch, labels=None):
     return data
 
 
+def encode_campaign_products(rep, epoch):
+    """rows [day, campanha, origem/mídia, produto, compras, receita] -> índices em três listas"""
+    camps, srcs, prods = {}, {}, {}
+    out = []
+    for r in rep.get("rows", []):
+        if not r[4] and not r[5]:
+            continue
+        d = (datetime.strptime(r[0], "%Y-%m-%d").date() - epoch).days
+        out.append([d, camps.setdefault(r[1], len(camps)), srcs.setdefault(r[2], len(srcs)), prods.setdefault(r[3], len(prods)), r[4], r[5]])
+    out.sort()
+    return {"campaigns": list(camps), "sources": list(srcs), "products": list(prods), "rows": out}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--in", dest="inp", default="data/ga/analytics.json")
@@ -86,6 +99,7 @@ def main():
                         products=encode(reps["products"], epoch),
                         devices=encode(reps["devices"], epoch, DEVICE_LABELS),
                         regions=encode(reps["regions"], epoch, region_label))
+            data["campaignProducts"] = encode_campaign_products(reps.get("campaign_products") or {}, epoch)
             titles = raw.get("titles") or {}
             data["pages"]["titles"] = [titles.get(p, "") for p in data["pages"]["names"]]
         data.update(property=raw.get("property"), fetchedAt=(raw.get("fetched_at") or "")[:10])

@@ -11,6 +11,7 @@ Relatórios buscados, todos por dia:
     pages     por caminho da página (visualizações, tempo de engajamento, usuários)
     landing   por página de entrada (sessões, engajadas, compras, receita)
     products  por produto (itens vistos, no carrinho, comprados, receita do item)
+    campaign_products  produtos comprados por campanha (utm_campaign) e origem/mídia (só linhas com compra)
     devices   por tipo de dispositivo
     regions   por estado (região do GA)
 Para páginas, origens, produtos e páginas de entrada só entram os N maiores da janela; o resto
@@ -40,17 +41,23 @@ from datetime import date, datetime, timedelta, timezone
 API = "https://analyticsdata.googleapis.com/v1beta/properties/{pid}:runReport"
 PAGE = 100000
 
+SESSION_METRICS = ["sessions", "engagedSessions", "ecommercePurchases", "purchaseRevenue"]
 REPORTS = {
-    # nome: (dimensão extra ou None, métricas, limite de valores distintos ou None)
-    "daily": (None, ["sessions", "totalUsers", "newUsers", "engagedSessions", "userEngagementDuration",
-                     "screenPageViews", "addToCarts", "checkouts", "ecommercePurchases", "purchaseRevenue"], None),
-    "channels": ("sessionDefaultChannelGroup", ["sessions", "engagedSessions", "ecommercePurchases", "purchaseRevenue"], None),
-    "sources": ("sessionSourceMedium", ["sessions", "engagedSessions", "ecommercePurchases", "purchaseRevenue"], 40),
-    "pages": ("pagePath", ["screenPageViews", "userEngagementDuration", "totalUsers"], 200),
-    "landing": ("landingPage", ["sessions", "engagedSessions", "ecommercePurchases", "purchaseRevenue"], 100),
-    "products": ("itemName", ["itemsViewed", "itemsAddedToCart", "itemsPurchased", "itemRevenue"], 300),
-    "devices": ("deviceCategory", ["sessions", "engagedSessions", "ecommercePurchases", "purchaseRevenue"], None),
-    "regions": ("region", ["sessions", "engagedSessions", "ecommercePurchases", "purchaseRevenue"], 40),
+    # dims: dimensões além do dia; top: quantos valores distintos guardar (o resto vira "(outros)");
+    # rank: índices das métricas que ordenam esse corte; nonzero: só guarda linhas com essa métrica > 0
+    "daily": {"dims": [], "metrics": ["sessions", "totalUsers", "newUsers", "engagedSessions", "userEngagementDuration",
+                                      "screenPageViews", "addToCarts", "checkouts", "ecommercePurchases", "purchaseRevenue"]},
+    "channels": {"dims": ["sessionDefaultChannelGroup"], "metrics": SESSION_METRICS},
+    "sources": {"dims": ["sessionSourceMedium"], "metrics": SESSION_METRICS, "top": 60, "rank": (0,)},
+    "pages": {"dims": ["pagePath"], "metrics": ["screenPageViews", "userEngagementDuration", "totalUsers"], "top": 400, "rank": (0,)},
+    "landing": {"dims": ["landingPage"], "metrics": SESSION_METRICS, "top": 150, "rank": (0,)},
+    "products": {"dims": ["itemName"], "metrics": ["itemsViewed", "itemsAddedToCart", "itemsPurchased", "itemRevenue"],
+                 "top": 500, "rank": (2, 0)},
+    "devices": {"dims": ["deviceCategory"], "metrics": SESSION_METRICS},
+    "regions": {"dims": ["region"], "metrics": SESSION_METRICS, "top": 40, "rank": (0,)},
+    # produtos comprados por campanha (utm_campaign) e origem/mídia da sessão: só linhas com compra
+    "campaign_products": {"dims": ["sessionCampaignName", "sessionSourceMedium", "itemName"],
+                          "metrics": ["itemsPurchased", "itemRevenue"], "nonzero": 0},
 }
 OTHER = "(outros)"
 
@@ -120,28 +127,36 @@ def num(v):
 
 
 def fetch(pid, token, name, since, until):
-    dim, metrics, top = REPORTS[name]
-    dims = [{"name": "date"}] + ([{"name": dim}] if dim else [])
+    spec = REPORTS[name]
+    dims, metrics, top = spec["dims"], spec["metrics"], spec.get("top")
+    nd = len(dims)
+    body_dims = [{"name": "date"}] + [{"name": d} for d in dims]
     rows, offset = [], 0
     while True:
         body = {"dateRanges": [{"startDate": since.isoformat(), "endDate": until.isoformat()}],
-                "dimensions": dims, "metrics": [{"name": m} for m in metrics],
+                "dimensions": body_dims, "metrics": [{"name": m} for m in metrics],
                 "limit": PAGE, "offset": offset, "keepEmptyRows": False}
+        if "nonzero" in spec:
+            body["metricFilter"] = {"filter": {"fieldName": metrics[spec["nonzero"]],
+                                               "numericFilter": {"operation": "GREATER_THAN", "value": {"int64Value": "0"}}}}
         res = run_report(pid, token, body)
         for r in res.get("rows", []):
             dv = [d["value"] for d in r["dimensionValues"]]
             mv = [num(m["value"]) for m in r["metricValues"]]
             day = f"{dv[0][:4]}-{dv[0][4:6]}-{dv[0][6:]}"
-            rows.append([day] + ([dv[1]] if dim else []) + mv)
+            rows.append([day] + dv[1:] + mv)
         total = int(res.get("rowCount") or 0)
         offset += PAGE
         if offset >= total or not res.get("rows"):
             break
-    if dim and top:
+    if nd == 1 and top:
+        rank = spec.get("rank", (0,))
         tot = {}
         for r in rows:
-            tot[r[1]] = tot.get(r[1], 0) + (r[2] or 0)
-        keep = set(sorted(tot, key=lambda k: -tot[k])[:top])
+            t = tot.setdefault(r[1], [0] * len(rank))
+            for j, mi in enumerate(rank):
+                t[j] += r[2 + mi] or 0
+        keep = set(sorted(tot, key=lambda k: tuple(-x for x in tot[k]))[:top])
         merged = {}
         out = []
         for r in rows:
@@ -155,7 +170,7 @@ def fetch(pid, token, name, since, until):
             for i in range(len(metrics)):
                 merged[key][2 + i] += r[2 + i]
         rows = out
-    rows.sort(key=lambda r: (r[0], r[1] if dim else ""))
+    rows.sort(key=lambda r: tuple(r[:1 + nd]))
     return rows
 
 
@@ -187,8 +202,8 @@ def main():
     token = access_token(sa)
 
     reports = {}
-    for name, (dim, metrics, _) in REPORTS.items():
-        reports[name] = {"columns": ["day"] + ([dim] if dim else []) + metrics, "rows": fetch(pid, token, name, since, until)}
+    for name, spec in REPORTS.items():
+        reports[name] = {"columns": ["day"] + spec["dims"] + spec["metrics"], "rows": fetch(pid, token, name, since, until)}
     titles = fetch_titles(pid, token, since, until)
 
     old = {}
@@ -198,7 +213,8 @@ def main():
     for name, rep in reports.items():
         prev = (old.get("reports") or {}).get(name) or {}
         keep = [r for r in prev.get("rows", []) if not lo <= r[0] <= hi] if prev.get("columns") == rep["columns"] else []
-        rep["rows"] = sorted(keep + rep["rows"], key=lambda r: (r[0], r[1] if len(r) > 1 and isinstance(r[1], str) else ""))
+        nd = len(REPORTS[name]["dims"])
+        rep["rows"] = sorted(keep + rep["rows"], key=lambda r: tuple(r[:1 + nd]))
     all_titles = old.get("titles") or {}
     all_titles.update(titles)
 

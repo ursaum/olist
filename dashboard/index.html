@@ -360,6 +360,9 @@ footer p { margin: 4px 0; }
   #camp-table th:nth-child(8), #camp-table td:nth-child(8),
   #camp-table th:nth-child(9), #camp-table td:nth-child(9) { display: none; }
   #camp-table td.clip { white-space: normal; max-width: none; line-height: 1.25; }
+  #m-prod-table th:nth-child(5), #m-prod-table td:nth-child(5) { display: none; }
+  #m-prod-table td.clip { white-space: normal; max-width: none; line-height: 1.25; }
+  #m-prod-table td.clip .clip-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   #g-pages-table th:nth-child(3), #g-pages-table td:nth-child(3),
   #g-pages-table th:nth-child(5), #g-pages-table td:nth-child(5),
   #g-landing-table th:nth-child(3), #g-landing-table td:nth-child(3),
@@ -524,6 +527,17 @@ footer p { margin: 4px 0; }
   <div class="table-foot"><span id="m-foot"></span></div>
 </section>
 
+<section class="card" id="m-prod-card" style="margin-top:14px" hidden>
+  <div class="card-head"><h2>Produtos vendidos pelas campanhas</h2><span class="hint" id="m-prod-hint"></span></div>
+  <div class="table-wrap">
+    <table id="m-prod-table">
+      <thead><tr><th data-k="name">Produto</th><th data-k="campaign">Campanha</th><th class="n" data-k="purchased" aria-sort="descending">Compras</th><th class="n" data-k="rev">Receita</th><th class="n" data-k="share">%</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div class="table-foot"><span id="m-prod-foot"></span><button class="more" id="m-prod-more" type="button" hidden></button></div>
+</section>
+
 <section class="card setup" id="m-setup" hidden>
   <h2>Meta Ads ainda não conectado</h2>
   <p>Esta aba mostra investimento, compras atribuídas, valor de vendas, ROAS e custo por venda das campanhas, por período e por campanha. Para ativar:</p>
@@ -538,6 +552,7 @@ footer p { margin: 4px 0; }
 <footer>
   <p><b>Fonte:</b> Meta Marketing API, conta <span id="m-account"></span>, atualizado em <span id="m-gen-date"></span>. Vendas e valor = compras atribuídas pelo Meta (evento de compra, janela de atribuição padrão da conta). ROAS = valor das compras ÷ investimento. Custo por venda = investimento ÷ compras.</p>
   <p>A atribuição do Meta pode contar uma mesma compra também em outras fontes; compare com a receita da loja na aba Vendas.</p>
+  <p><b>Produtos vendidos pelas campanhas:</b> vêm do Google Analytics (compras no site em sessões com origem paga do Meta: ig, fb, facebook ou instagram com mídia cpc/paid), agrupadas pelo <i>utm_campaign</i> do anúncio. Sem utm_campaign, a campanha aparece como "(not set)". São compras registradas pelo GA, não a atribuição do Meta.</p>
 </footer>
 </div>
 
@@ -1180,6 +1195,8 @@ footer p { margin: 4px 0; }
     $('m-clear').addEventListener('click', () => { MF.camp = -1; MF.status = ''; MF.from = Math.max(0, MLAST - 29); MF.to = MLAST; MF.preset = '30d'; updateMeta(); });
     $('m-search').addEventListener('input', renderCampTable);
     setupSort($('camp-table'), v => { campSort = v; renderCampTable(); }, () => campSort);
+    setupSort($('m-prod-table'), v => { mpSort = v; renderMetaProducts(); }, () => mpSort);
+    $('m-prod-more').addEventListener('click', () => { mpExpanded = !mpExpanded; renderMetaProducts(); });
     const lg = $('m-legend');
     const sw = (cls, label) => { const w = el('span'); const i = el('i', 'sw'); i.style.background = `var(${cls})`; w.append(i, label); return w; };
     lg.append(sw('--bar-2', 'Investimento'), sw('--bar', 'Valor das vendas atribuídas'));
@@ -1219,7 +1236,50 @@ footer p { margin: 4px 0; }
     if (MF.camp >= 0) chip('Campanha', MD.campaigns[MF.camp].name, () => { MF.camp = -1; });
     if (MF.status) chip('Status', MF.status, () => { MF.status = ''; });
     $('m-clear').hidden = !(MF.camp >= 0 || MF.status || MF.preset !== '30d');
-    renderMetaKpis(); renderMetaTrend(); renderCampChart(); renderCampTable(); renderHeaderMeta();
+    renderMetaKpis(); renderMetaTrend(); renderCampChart(); renderCampTable(); renderMetaProducts(); renderHeaderMeta();
+  }
+
+  // produtos comprados no site em sessões vindas de anúncios do Meta, segundo o GA4 (utm_campaign)
+  let mpSort = { key: 'purchased', dir: 'desc' }, mpExpanded = false;
+  const META_SOURCE = /^(ig|fb|facebook|instagram|meta|instagram\.com|facebook\.com|l\.instagram\.com|m\.facebook\.com|lm\.facebook\.com)\s*\/\s*(cpc|paid|paid_social|paidsocial|ads|ad|social_paid)$/i;
+  const normName = n => n.toLowerCase().replace(/\s+/g, ' ').trim();
+  function renderMetaProducts() {
+    const card = $('m-prod-card');
+    const GP = window.GA_DATA && window.GA_DATA.campaignProducts;
+    if (!GP || !GP.rows.length || !window.GA_DATA.epoch) { card.hidden = true; return; }
+    card.hidden = false;
+    const gEpoch = new Date(window.GA_DATA.epoch + 'T00:00:00');
+    const shift = Math.round((gEpoch.getTime() - MEPOCH.getTime()) / 864e5);   // dia do GA -> dia do Meta
+    const isMeta = GP.sources.map(x => META_SOURCE.test(x));
+    const selected = MF.camp >= 0 ? normName(MD.campaigns[MF.camp].name) : null;
+    const campNorm = GP.campaigns.map(normName);
+    const known = new Set(MD.campaigns.map(c => normName(c.name)));
+    const agg = new Map(); let total = 0, purchases = 0, tagged = 0;
+    for (const r of GP.rows) {
+      const d = r[0] + shift;
+      if (d < MF.from || d > MF.to || !isMeta[r[2]]) continue;
+      if (selected !== null && campNorm[r[1]] !== selected) continue;
+      const k = r[3] + '\u0000' + r[1];
+      let e = agg.get(k); if (!e) { e = { name: GP.products[r[3]], campaign: GP.campaigns[r[1]], purchased: 0, rev: 0 }; agg.set(k, e); }
+      e.purchased += r[4]; e.rev += r[5]; purchases += r[4]; total += r[5];
+      if (known.has(campNorm[r[1]])) tagged += r[4];
+    }
+    const rows = [...agg.values()].map(e => ({ ...e, share: total ? e.rev / total : 0 }));
+    const dir = mpSort.dir === 'desc' ? -1 : 1, textual = mpSort.key === 'name' || mpSort.key === 'campaign';
+    rows.sort((a, b) => textual ? dir * a[mpSort.key].localeCompare(b[mpSort.key], 'pt-BR') : (dir * (a[mpSort.key] - b[mpSort.key])) || a.name.localeCompare(b.name, 'pt-BR'));
+    const table = $('m-prod-table'), tbody = table.querySelector('tbody'); tbody.replaceChildren(); applySortMarks(table, mpSort);
+    const LIMIT = 12, shown = mpExpanded ? rows : rows.slice(0, LIMIT);
+    for (const r of shown) {
+      const tr = el('tr');
+      const nameTd = cell('', false); nameTd.className = 'clip'; nameTd.title = r.name; nameTd.appendChild(el('span', 'clip-text', r.name)); tr.appendChild(nameTd);
+      const campTd = cell('', false); campTd.className = 'clip'; campTd.title = r.campaign; campTd.appendChild(el('span', 'clip-text', r.campaign)); tr.appendChild(campTd);
+      tr.append(cell(fmtInt.format(r.purchased)), cell(fmtBRL.format(r.rev)), cell(fmtPct.format(r.share)));
+      tbody.appendChild(tr);
+    }
+    if (!rows.length) { const tr = el('tr'); const td = el('td', 'empty', 'Nenhuma compra registrada pelo GA em sessões vindas de anúncios do Meta neste recorte.'); td.colSpan = 5; tr.appendChild(td); tbody.appendChild(tr); }
+    $('m-prod-hint').textContent = purchases ? fmtInt.format(purchases) + (purchases === 1 ? ' compra' : ' compras') + ' · ' + fmtBRL.format(total) + ' · segundo o Google Analytics' : 'segundo o Google Analytics';
+    $('m-prod-foot').textContent = rows.length ? fmtInt.format(rows.length) + (rows.length === 1 ? ' linha' : ' linhas') + (purchases && tagged < purchases ? ' · ' + fmtPct.format(1 - tagged / purchases) + ' das compras sem utm_campaign igual ao nome da campanha' : '') : '';
+    const more = $('m-prod-more'); more.hidden = rows.length <= LIMIT; more.textContent = mpExpanded ? 'Mostrar menos' : 'Mostrar todas';
   }
 
   function renderMetaKpis() {
