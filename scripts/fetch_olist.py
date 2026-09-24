@@ -35,7 +35,7 @@ API = "https://api.tiny.com.br/api2/"
 PAUSE = 2.2                 # segundos entre requisições (limite da API: ~30 por minuto)
 COLUMNS = ["day", "order_name", "shipping_region", "shipping_city", "billing_region", "billing_city",
            "sales_channel", "product_type", "product_title", "net_items_sold", "gross_sales",
-           "discounts", "returns", "net_sales", "shipping_charges"]
+           "discounts", "returns", "net_sales", "shipping_charges", "neighborhood"]
 CANCELLED = {"cancelado"}
 
 
@@ -118,8 +118,11 @@ def order_rows(order, channel):
     ent = order.get("endereco_entrega") or {}
     ship_uf, ship_city = (ent.get("uf") or "").strip().upper(), (ent.get("cidade") or "").strip()
     bill_uf, bill_city = (cli.get("uf") or "").strip().upper(), (cli.get("cidade") or "").strip()
+    hood = (ent.get("bairro") or "").strip()
     if not ship_uf and not ship_city:
         ship_uf, ship_city = bill_uf, bill_city
+        hood = (cli.get("bairro") or "").strip()
+    hood = " ".join(w if w.isupper() and len(w) <= 3 else w.capitalize() for w in hood.lower().split()) if hood.isupper() else hood
     common = [day, oid, ship_uf, ship_city, bill_uf, bill_city, channel]
     cancelled = fold(order.get("situacao")) in CANCELLED
 
@@ -140,9 +143,9 @@ def order_rows(order, channel):
         ret = round(gross - share, 2) if cancelled else 0.0
         net = round(gross - share - ret, 2)
         items_sold = 0 if cancelled else int(qty) if qty == int(qty) else qty
-        rows.append(common + ["", title, items_sold, gross, -share if share else 0, -ret if ret else 0, net, 0])
+        rows.append(common + ["", title, items_sold, gross, -share if share else 0, -ret if ret else 0, net, 0, hood])
     shipping = 0.0 if cancelled else money(order.get("valor_frete"))
-    rows.append(common + ["", "", 0, 0, 0, 0, 0, round(shipping, 2)])
+    rows.append(common + ["", "", 0, 0, 0, 0, 0, round(shipping, 2), hood])
     return rows
 
 
@@ -175,6 +178,7 @@ def main():
     existing = []
     if os.path.exists(args.out):
         existing = json.load(open(args.out, encoding="utf-8")).get("rows", [])
+        existing = [r + [""] * (len(COLUMNS) - len(r)) for r in existing]   # linhas antigas sem bairro
     new_ids = {r[1] for r in fetched}
     rows = [r for r in existing if r[1] not in new_ids] + fetched
     rows.sort(key=lambda r: (r[0], r[1]))

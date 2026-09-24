@@ -7,8 +7,13 @@ Entrada: o JSON devolvido pela ferramenta de analytics da Shopify (run-analytics
     SHOW orders, quantity_ordered, net_items_sold, gross_sales, discounts, returns,
          net_sales, shipping_charges
     GROUP BY day, order_name, shipping_region, shipping_city, billing_region,
-             billing_city, sales_channel, product_type, product_title
+             billing_city, sales_channel, product_type, product_title, shipping_postal_code
     SINCE AAAA-MM-01 UNTIL AAAA-MM-<último dia> LIMIT 5000
+
+Se a consulta trouxer shipping_postal_code, o CEP é trocado pelo nome do bairro (consulta em
+scripts/cep_bairro.py, com cache fora do git) e só o bairro é gravado: o CEP nunca vai para o
+repositório. Sem acesso aos serviços de CEP, o bairro fica vazio e é preenchido na próxima
+reextração do mês.
 
 Saída: data/shopify/sales-AAAA-MM.json, no mesmo formato compacto da base histórica
 (string-table), com prioridade 2 e "replaces_days" cobrindo o mês inteiro: ao gerar o
@@ -27,6 +32,10 @@ import calendar
 import hashlib
 import json
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from cep_bairro import bairros_for, clean as clean_cep  # noqa: E402
 
 KEEP = ["day", "order_name", "shipping_region", "shipping_city", "billing_region", "billing_city",
         "sales_channel", "product_type", "product_title", "net_items_sold", "gross_sales",
@@ -56,6 +65,8 @@ def convert(raw, month):
     if missing:
         raise SystemExit(f"colunas ausentes na consulta: {missing}")
     rows = raw["rows"]
+    has_cep = "shipping_postal_code" in ix
+    bairros = bairros_for([r[ix["shipping_postal_code"]] for r in rows]) if has_cep else {}
     if len(rows) >= LIMIT:
         raise SystemExit(f"a consulta devolveu {len(rows)} linhas (LIMIT {LIMIT}); divida o período")
     strings, sidx, out = [], {}, []
@@ -74,10 +85,11 @@ def convert(raw, month):
         text = [day, opaque_id(r[ix["order_name"]]), r[ix["shipping_region"]], r[ix["shipping_city"]],
                 br, bc, r[ix["sales_channel"]], r[ix["product_type"]], r[ix["product_title"]]]
         nums = [num(r[ix[c]]) for c in KEEP[N_TEXT:]]
-        out.append([s(v) for v in text] + nums)
+        hood = bairros.get(clean_cep(r[ix["shipping_postal_code"]]), "") if has_cep else ""
+        out.append([s(v) for v in text] + nums + [hood])
     out.sort(key=lambda r: (strings[r[0]], strings[r[1]]))
     return {
-        "columns": [{"name": c} for c in KEEP],
+        "columns": [{"name": c} for c in KEEP + ["neighborhood"]],
         "encoding": "string-table",
         "priority": 2,
         "source": "shopifyql",

@@ -15,6 +15,11 @@ Formato: {"columns": [{"name": ...}], "rows": [[...], ...], "priority": 1|2,
              billing_city, sales_channel, product_type, product_title
     SINCE 2023-01-01 UNTIL today LIMIT 5000
 
+Bairro: vem da coluna opcional "neighborhood" (arquivos mensais novos e Olist) ou, para a base
+histórica, de data/geo/bairros-shopify.json (dia + estado + cidade -> bairro, montado por
+scripts/cep_bairro.py). Bairros com menos de MIN_HOOD_ORDERS pedidos no total viram
+"Outros bairros", para ninguém ser identificado pelo bairro numa página pública.
+
 Uso:
     python3 scripts/build_shopify.py --in data/shopify/*.json --out dashboard
 """
@@ -30,6 +35,11 @@ from build_data import REGIONS, STATE_NAMES, STATE_ORDER, STATE_REGION, title_ci
 COLUMNS = ["day", "order_name", "shipping_region", "shipping_city", "billing_region", "billing_city",
            "sales_channel", "product_type", "product_title", "net_items_sold", "gross_sales",
            "discounts", "returns", "net_sales", "shipping_charges"]   # colunas usadas pelo dashboard
+OPTIONAL = ["neighborhood"]            # quando o arquivo não tem, fica ""
+MIN_HOOD_ORDERS = 3
+OTHER_HOODS = "Outros bairros"
+UNKNOWN_HOOD = "Não identificado"
+SPECIAL_HOODS = {"CEP geral da cidade", UNKNOWN_HOOD, OTHER_HOODS}
 NAME_TO_UF = {name: uf for uf, name in STATE_NAMES.items()}
 NAME_TO_UF.update({uf: uf for uf in STATE_NAMES})
 CHANNEL_LABELS = {
@@ -70,13 +80,32 @@ def load(paths):
         missing = [x for x in COLUMNS if x not in c]
         if missing:
             raise SystemExit(f"colunas ausentes em {p}: {missing}")
-        if c != COLUMNS:                       # projeta nas colunas comuns (a Admin API traz colunas a mais)
-            idx = [c.index(x) for x in COLUMNS]
-            d["rows"] = [[r[i] for i in idx] for r in d["rows"]]
+        want = COLUMNS + OPTIONAL
+        if c != want:                          # projeta nas colunas comuns (a Admin API traz colunas a mais)
+            idx = [c.index(x) if x in c else None for x in want]
+            d["rows"] = [[(r[i] if i is not None else "") for i in idx] for r in d["rows"]]
         if prio != level:                      # fecha o nível anterior
-            rows, level_files, level = _merge_level(COLUMNS, rows, level_files), [], prio
+            rows, level_files, level = _merge_level(want, rows, level_files), [], prio
         level_files.append(d)
-    return COLUMNS, _merge_level(COLUMNS, rows, level_files)
+    return COLUMNS + OPTIONAL, _merge_level(COLUMNS + OPTIONAL, rows, level_files)
+
+
+def fold(t):
+    import unicodedata
+    return " ".join("".join(c for c in unicodedata.normalize("NFD", t.lower()) if unicodedata.category(c) != "Mn").split())
+
+
+def nice_hood(t):
+    t = " ".join((t or "").split())
+    return t.title().replace(" Da ", " da ").replace(" De ", " de ").replace(" Do ", " do ").replace(" Dos ", " dos ").replace(" Das ", " das ") if t.isupper() or t.islower() else t
+
+
+def load_overlay(path):
+    """(dia, estado, cidade) -> bairro, só quando o dia/cidade tem um único bairro."""
+    if not path or not os.path.exists(path):
+        return {}
+    d = json.load(open(path, encoding="utf-8"))
+    return {(r[0], r[1], r[2]): r[3][0] for r in d["rows"] if len(r[3]) == 1}
 
 
 def _merge_level(cols, rows, level_files):
@@ -103,12 +132,27 @@ def main():
     ap.add_argument("--in", dest="inputs", nargs="+", default=["data/shopify/*.json"])
     ap.add_argument("--out", default="dashboard")
     ap.add_argument("--store", default="Strut")
+    ap.add_argument("--bairros", default="data/geo/bairros-shopify.json",
+                    help="bairros da base histórica (dia/estado/cidade -> bairro)")
     args = ap.parse_args()
     paths = sorted(p for pat in args.inputs for p in glob.glob(pat))
     if not paths:
         raise SystemExit("nenhum arquivo de entrada")
     cols, raw = load(paths)
     ix = {c: i for i, c in enumerate(cols)}
+    overlay = load_overlay(args.bairros)
+
+    # bairro de cada linha: coluna própria, senão o mapa da base histórica, senão outra linha do
+    # mesmo pedido (estornos e fretes caem em outros dias)
+    hood_of = []
+    order_hood = {}
+    for r in raw:
+        h = (r[ix["neighborhood"]] or "").strip()
+        if not h and r[ix["shipping_city"]]:
+            h = overlay.get((r[ix["day"]], r[ix["shipping_region"]], r[ix["shipping_city"]]), "")
+        hood_of.append(h)
+        if h:
+            order_hood.setdefault(r[ix["order_name"]], h)
 
     # produtos sem tipo cadastrado: usa o tipo conhecido que inicia o título (ex.: "Bota ...")
     known_types = sorted({r[ix["product_type"]] for r in raw if r[ix["product_type"]]}, key=len, reverse=True)
@@ -131,7 +175,8 @@ def main():
     agg = defaultdict(lambda: [0, 0.0, 0.0, 0.0, 0.0, 0.0])  # items, gross, discounts, returns, net, shipping
     seen = set()
     min_day = None
-    for r in raw:
+    hoods, hood_idx = [], {}
+    for n, r in enumerate(raw):
         key_raw = tuple(r)
         if key_raw in seen:      # períodos sobrepostos entre arquivos
             continue
@@ -171,7 +216,16 @@ def main():
         oname = r[ix["order_name"]]
         if oname not in order_idx:
             order_idx[oname] = len(order_idx)
-        key = (order_idx[oname], day, s, city_idx[ckey], p_i, t_i, channel_idx[ch])
+        if city_name:
+            hname = nice_hood(hood_of[n] or order_hood.get(oname) or UNKNOWN_HOOD)
+            hkey = (fold(hname), city_idx[ckey])
+            if hkey not in hood_idx:
+                hood_idx[hkey] = len(hoods)
+                hoods.append([hname, city_idx[ckey]])
+            h_i = hood_idx[hkey]
+        else:
+            h_i = -1
+        key = (order_idx[oname], day, s, city_idx[ckey], p_i, t_i, channel_idx[ch], h_i)
         a = agg[key]
         a[0] += int(r[ix["net_items_sold"]] or 0)
         a[1] += float(r[ix["gross_sales"]] or 0)
@@ -180,11 +234,26 @@ def main():
         a[4] += float(r[ix["net_sales"]] or 0)
         a[5] += float(r[ix["shipping_charges"]] or 0)
 
+    # bairros com poucos pedidos viram "Outros bairros" da mesma cidade
+    hood_orders = defaultdict(set)
+    for (oid, _d, _s, _c, _p, _t, _ch, h) in agg:
+        if h >= 0:
+            hood_orders[h].add(oid)
+    final_hoods, final_idx, remap = [], {}, {}
+    for h, (hname, cidx) in enumerate(hoods):
+        name = hname if hname in SPECIAL_HOODS or len(hood_orders[h]) >= MIN_HOOD_ORDERS else OTHER_HOODS
+        k = (name, cidx)
+        if k not in final_idx:
+            final_idx[k] = len(final_hoods)
+            final_hoods.append([name, cidx])
+        remap[h] = final_idx[k]
+
     rows, max_day = [], 0
-    for (oid, day, s, c, p, t, ch), (items, gross, disc, ret, net, ship) in agg.items():
+    for (oid, day, s, c, p, t, ch, h), (items, gross, disc, ret, net, ship) in agg.items():
         d = (day - min_day).days
         max_day = max(max_day, d)
-        rows.append([oid, d, s, c, p, t, ch, items, round(net, 2), round(ship, 2), round(gross, 2), round(disc, 2), round(ret, 2)])
+        rows.append([oid, d, s, c, p, t, ch, items, round(net, 2), round(ship, 2), round(gross, 2), round(disc, 2), round(ret, 2),
+                     remap.get(h, -1)])
     rows.sort(key=lambda r: (r[1], r[0]))
 
     data = {
@@ -200,7 +269,8 @@ def main():
         "types": types,
         "channels": channels,
         "channelGroups": channel_group,
-        "columns": ["order", "day", "state", "city", "product", "type", "channel", "items", "net", "shipping", "gross", "discounts", "returns"],
+        "neighborhoods": final_hoods,
+        "columns": ["order", "day", "state", "city", "product", "type", "channel", "items", "net", "shipping", "gross", "discounts", "returns", "hood"],
         "notes": "product/type = -1 em linhas só de frete",
         "rows": rows,
     }
@@ -213,7 +283,9 @@ def main():
     no_state = sum(1 for r in rows if r[2] < 0)
     print(f"data.js: {len(rows)} linhas, {len(order_idx)} pedidos, {len(cities)} cidades, {len(products)} produtos, "
           f"{len(types)} tipos, receita líquida R$ {net_total:,.2f}, {min_day} a "
-          f"{date.fromordinal(min_day.toordinal() + max_day)}, {no_state} linhas sem estado")
+          f"{date.fromordinal(min_day.toordinal() + max_day)}, {no_state} linhas sem estado; "
+          f"{sum(1 for h in final_hoods if h[0] not in SPECIAL_HOODS)} bairros, "
+          f"{sum(1 for r in rows if r[13] >= 0 and final_hoods[r[13]][0] == UNKNOWN_HOOD)} linhas sem bairro")
 
 
 if __name__ == "__main__":

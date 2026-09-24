@@ -142,6 +142,23 @@ Com eles, `scripts/fetch_shopify.py` acumula os pedidos dos últimos 58 dias em
 > são substituídos por identificadores opacos e nenhum dado de cliente entra nos arquivos.
 > No plano gratuito do GitHub, o Pages só funciona em repositórios públicos.
 
+### Bairros
+
+O filtro **Bairro** aparece depois do filtro de cidade; com uma cidade escolhida, a tabela de
+cidades vira a tabela de bairros daquela cidade.
+
+- **Shopify:** a consulta ShopifyQL traz o CEP de entrega (`shipping_postal_code`) e
+  `scripts/shopifyql_to_base.py` troca o CEP pelo nome do bairro antes de gravar. A consulta
+  do bairro (`scripts/cep_bairro.py`, ViaCEP com BrasilAPI de reserva) roda na sessão que extrai
+  os dados, com cache em `.cache/ceps.json`, fora do git: **o CEP dos clientes nunca vai para o
+  repositório**, que é público. A base histórica usa `data/geo/bairros-shopify.json`
+  (dia + estado + cidade -> bairro), montado com `python3 scripts/cep_bairro.py overlay`.
+- **Mercado Livre:** o bairro vem direto do endereço do pedido no Olist Tiny. Para preencher o
+  histórico, rode o workflow uma vez com *olist_since*.
+- Bairros com menos de 3 pedidos no total aparecem como "Outros bairros" da cidade, para
+  ninguém ser identificado pelo bairro. "CEP geral da cidade" são municípios com CEP único;
+  "Não identificado" são pedidos sem CEP ou com CEP que a base dos Correios não reconhece.
+
 ### Comportamento do dashboard
 
 - As três abas abrem com o período **Mês atual** (do dia 1º do mês do dado mais recente até ele).
@@ -171,7 +188,9 @@ scripts/fetch_ga.py         busca na Google Analytics Data API as métricas do s
 scripts/build_ga.py         gera dashboard/ga.js a partir de data/ga/analytics.json
 scripts/fetch_shopify.py    busca pedidos na Admin API e acumula em api-orders.json
 scripts/build_shopify.py    gera dashboard/data.js a partir das extrações
-scripts/shopifyql_to_base.py converte o resultado ShopifyQL de um mês em data/shopify/sales-AAAA-MM.json
+scripts/shopifyql_to_base.py converte o resultado ShopifyQL de um mês em data/shopify/sales-AAAA-MM.json (CEP -> bairro)
+scripts/cep_bairro.py       consulta o bairro de CEPs (cache fora do git) e monta data/geo/bairros-shopify.json
+data/geo/bairros-shopify.json bairro por dia/estado/cidade da base histórica da Shopify (sem CEP)
 scripts/build_data.py       constantes (estados, regiões), gerador do mapa e do dataset de demonstração (Olist)
 scripts/download_raw.sh     baixa o dataset público da Olist e o GeoJSON dos estados (só para a demonstração / mapa)
 .github/workflows/deploy.yml atualização diária e publicação no GitHub Pages

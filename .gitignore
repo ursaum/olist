@@ -4,3 +4,5 @@ __pycache__/
 dashboard/data.js
 dashboard/meta.js
 dashboard/ga.js
+# cache local de CEP -> bairro e mapas com CEP (nunca vão para o repositório público)
+.cache/
