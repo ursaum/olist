@@ -144,8 +144,9 @@ Com eles, `scripts/fetch_shopify.py` acumula os pedidos dos últimos 58 dias em
 
 ### Bairros
 
-O filtro **Bairro** aparece depois do filtro de cidade; com uma cidade escolhida, a tabela de
-cidades vira a tabela de bairros daquela cidade.
+O quadro **Bairros** fica ao lado do de cidades e mostra os bairros do recorte atual (Brasil,
+estado ou cidade), com pedidos, receita, ticket e participação; clicar num bairro filtra o
+dashboard. O filtro **Bairro** aparece depois do filtro de cidade.
 
 - **Shopify:** a consulta ShopifyQL traz o CEP de entrega (`shipping_postal_code`) e
   `scripts/shopifyql_to_base.py` troca o CEP pelo nome do bairro antes de gravar. A consulta

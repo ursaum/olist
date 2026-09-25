@@ -229,6 +229,9 @@ button, select, input { font: inherit; color: inherit; }
 /* ---------- cards / grid ---------- */
 .grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 14px; margin-bottom: 14px; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.grid-1 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-top: 14px; }
+td .place { display: block; color: var(--muted); font-size: 11.5px; }
+#hoods-table td:first-child { white-space: normal; min-width: 150px; line-height: 1.25; }
 .card { background: var(--surface); border: 1px solid var(--hairline); border-radius: 10px; padding: 14px 16px 12px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
 .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .card-head .hint { color: var(--muted); font-size: 12px; }
@@ -363,6 +366,8 @@ footer p { margin: 4px 0; }
   .tooltip { font-size: 13px; max-width: 260px; }
   th, td { padding: 9px 8px; }
   td.clip { max-width: 170px; }
+  #hoods-table th:nth-child(4), #hoods-table td:nth-child(4),
+  #hoods-table th:nth-child(5), #hoods-table td:nth-child(5),
   #cities-table th:nth-child(3), #cities-table td:nth-child(3),
   #cities-table th:nth-child(5), #cities-table td:nth-child(5),
   #prods-table th:nth-child(2), #prods-table td:nth-child(2),
@@ -477,6 +482,21 @@ footer p { margin: 4px 0; }
     </div>
     <div class="table-foot"><span id="cities-foot"></span><button class="more" id="cities-more">Mostrar mais</button></div>
   </div>
+  <div class="card" id="hoods-card">
+    <div class="card-head"><h2 id="hoods-title">Bairros</h2><input class="search" id="hood-search" type="search" placeholder="Buscar bairro" aria-label="Buscar bairro"></div>
+    <div class="table-wrap">
+      <table id="hoods-table">
+        <thead><tr>
+          <th data-k="name">Bairro</th><th class="n" data-k="orders">Pedidos</th><th class="n" data-k="revenue" aria-sort="descending">Receita</th><th class="n" data-k="ticket">Ticket médio</th><th class="n" data-k="share">%</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="table-foot"><span id="hoods-foot"></span><button class="more" id="hoods-more">Mostrar mais</button></div>
+  </div>
+</section>
+
+<section class="grid-1">
   <div class="card">
     <div class="card-head"><h2 id="prod-title">Produtos e valores</h2><input class="search" id="prod-search" type="search" placeholder="Buscar produto" aria-label="Buscar produto"></div>
     <div class="table-wrap">
@@ -799,6 +819,9 @@ footer p { margin: 4px 0; }
     $('prods-more').addEventListener('click', () => { prodLimit += 50; renderProducts(); });
     setupSort($('cities-table'), k => { citySort = k; renderCities(); }, () => citySort);
     setupSort($('prods-table'), k => { prodSort = k; renderProducts(); }, () => prodSort);
+    setupSort($('hoods-table'), k => { hoodSort = k; renderHoodCard(); }, () => hoodSort);
+    $('hood-search').addEventListener('input', () => { hoodLimit = 15; renderHoodCard(); });
+    $('hoods-more').addEventListener('click', () => { hoodLimit += 30; renderHoodCard(); });
     $('gen-date').textContent = fmtDate.format(new Date(D.generatedAt + 'T00:00:00'));
   }
   // tipo predominante de cada produto (para manter os dois filtros coerentes)
@@ -873,8 +896,8 @@ footer p { margin: 4px 0; }
       const saveS = F.state, saveC = F.city, saveH = F.hood; F.state = -1; F.city = -1; F.hood = -1;
       const base = aggregate(); baseState = base.byState; baseRegion = base.byRegion; F.state = saveS; F.city = saveC; F.hood = saveH;
     } else { baseState = A.byState; baseRegion = A.byRegion; }
-    cityLimit = 25; prodLimit = 25;
-    renderKpis(); renderMap(); renderRegions(); renderTrend(); renderProductChart(); renderTypes(); renderCities(); renderProducts(); renderMeta();
+    cityLimit = 25; prodLimit = 25; hoodLimit = 15;
+    renderKpis(); renderMap(); renderRegions(); renderTrend(); renderProductChart(); renderTypes(); renderCities(); renderHoodCard(); renderProducts(); renderMeta();
   }
 
   function scopeLabel() {
@@ -1152,9 +1175,6 @@ footer p { margin: 4px 0; }
   // bairros especiais vão para o fim da lista
   const hoodRank = n => (n === 'Outros bairros' ? 1 : n === 'CEP geral da cidade' ? 2 : n === 'Não identificado' ? 3 : 0);
   function renderCities() {
-    if (F.city >= 0 && HAS_HOODS) return renderHoods();
-    $('cities-table').querySelector('th[data-k="name"]').textContent = 'Cidade';
-    $('city-search').placeholder = 'Buscar cidade';
     const q = $('city-search').value.trim().toLowerCase();
     let rows = [...A.byCity.entries()].map(([k, v]) => { const s = D.cities[k][1]; return { k, name: D.cities[k][0], uf: s >= 0 ? D.states[s].uf : '—', orders: v.orders, items: v.items, revenue: v.rev, ticket: v.orders ? v.rev / v.orders : 0 }; });
     if (q) rows = rows.filter(r => r.name.toLowerCase().includes(q));
@@ -1173,29 +1193,39 @@ footer p { margin: 4px 0; }
     $('cities-foot').textContent = `Mostrando ${Math.min(cityLimit, rows.length)} de ${fmtInt.format(rows.length)} cidades`;
     $('cities-more').hidden = rows.length <= cityLimit;
   }
-  function renderHoods() {
-    $('cities-table').querySelector('th[data-k="name"]').textContent = 'Bairro';
-    $('city-search').placeholder = 'Buscar bairro';
-    const q = $('city-search').value.trim().toLowerCase();
-    let rows = [...A.byHood.entries()].filter(([k]) => HOODS[k][1] === F.city).map(([k, v]) => ({ k, name: HOODS[k][0], orders: v.orders, items: v.items, revenue: v.rev, ticket: v.orders ? v.rev / v.orders : 0 }));
-    if (q) rows = rows.filter(r => r.name.toLowerCase().includes(q));
-    sortRows(rows, citySort);
-    rows.sort((a, b) => hoodRank(a.name) - hoodRank(b.name));        // especiais no fim, mantendo a ordem escolhida
-    const tbody = $('cities-table').querySelector('tbody'); tbody.replaceChildren();
-    applySortMarks($('cities-table'), citySort);
-    for (const r of rows.slice(0, cityLimit)) {
+  let hoodLimit = 15, hoodSort = { key: 'revenue', dir: 'desc' };
+  function renderHoodCard() {
+    const card = $('hoods-card'); card.hidden = !HAS_HOODS; if (!HAS_HOODS) return;
+    const q = $('hood-search').value.trim().toLowerCase();
+    let total = 0, named = 0;
+    const all = [...A.byHood.entries()].map(([k, v]) => { total += v.rev; const h = HOODS[k]; const c = D.cities[h[1]]; const special = hoodRank(h[0]) > 0; if (!special) named += v.rev;
+      return { k, special, name: h[0], place: c[0] + (c[1] >= 0 ? ' · ' + D.states[c[1]].uf : ''), city: h[1], orders: v.orders, revenue: v.rev, ticket: v.orders ? v.rev / v.orders : 0 }; });
+    all.forEach(r => { r.share = total ? r.revenue / total : 0; });
+    // com uma cidade escolhida, mostra também as faixas especiais (no fim); no Brasil/estado, só bairros com nome
+    let rows = all.filter(r => F.city >= 0 || !r.special);
+    if (q) rows = rows.filter(r => r.name.toLowerCase().includes(q) || r.place.toLowerCase().includes(q));
+    sortRows(rows, hoodSort);
+    rows.sort((a, b) => hoodRank(a.name) - hoodRank(b.name));
+    const table = $('hoods-table'), tbody = table.querySelector('tbody'); tbody.replaceChildren();
+    applySortMarks(table, hoodSort);
+    for (const r of rows.slice(0, hoodLimit)) {
       const tr = el('tr'); tr.className = F.hood === r.k ? 'selected' : '';
-      const td = el('td'); td.append(r.name); if (hoodRank(r.name)) td.className = 'muted'; tr.appendChild(td);
-      tr.append(cell(fmtInt.format(r.orders)), cell(fmtInt.format(r.items)), cell(fmtBRL.format(r.revenue)), cell(fmtBRL2.format(r.ticket)));
-      tr.addEventListener('click', () => { F.hood = F.hood === r.k ? -1 : r.k; update(); });
+      const td = el('td'); if (r.special) td.className = 'muted'; td.append(r.name); if (F.city < 0) td.appendChild(el('span', 'place', r.place)); tr.appendChild(td);
+      tr.append(cell(fmtInt.format(r.orders)), cell(fmtBRL.format(r.revenue)), cell(fmtBRL2.format(r.ticket)), cell(fmtPct.format(r.share)));
+      tr.addEventListener('click', () => {
+        if (F.hood === r.k) { F.hood = -1; }
+        else { F.city = r.city; const st = D.cities[r.city][1]; F.state = st; if (st < 0) F.region = 'X'; else if (F.region && D.states[st].region !== F.region) F.region = ''; F.hood = r.k; }
+        update();
+      });
       tbody.appendChild(tr);
     }
-    if (!rows.length) { const tr = el('tr'); const td = el('td', 'empty', 'Nenhuma venda neste recorte.'); td.colSpan = 5; tr.appendChild(td); tbody.appendChild(tr); }
-    const real = rows.filter(r => !hoodRank(r.name)).length;
-    $('cities-title').textContent = 'Bairros · ' + D.cities[F.city][0];
-    $('cities-foot').textContent = `${fmtInt.format(real)} ${real === 1 ? 'bairro' : 'bairros'} · bairros com menos de 3 pedidos no total aparecem em "Outros bairros"`;
-    $('cities-more').hidden = rows.length <= cityLimit;
+    if (!rows.length) { const tr = el('tr'); const td = el('td', 'empty', 'Nenhum bairro identificado neste recorte.'); td.colSpan = 5; tr.appendChild(td); tbody.appendChild(tr); }
+    $('hoods-title').textContent = F.city >= 0 ? 'Bairros · ' + D.cities[F.city][0] : F.state >= 0 ? 'Bairros · ' + D.states[F.state].name : F.region && F.region !== 'X' ? 'Bairros · ' + REGION_NAME[F.region] : 'Bairros';
+    const n = rows.filter(r => !r.special).length;
+    $('hoods-foot').textContent = `${fmtInt.format(n)} ${n === 1 ? 'bairro' : 'bairros'}` + (total ? ` · ${fmtPct.format(named / total)} da receita nos bairros listados` : '') + ' · bairros com menos de 3 pedidos entram em "Outros bairros"';
+    $('hoods-more').hidden = rows.length <= hoodLimit;
   }
+
   function renderProducts() {
     const q = $('prod-search').value.trim().toLowerCase();
     const total = A.tot.rev;
