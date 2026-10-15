@@ -21,6 +21,8 @@
   --accent-soft: #e4edf9;
   --select: #d95a26;
   --select-soft: #fbe7dd;
+  --good: #1d7a4d;
+  --bad: #b3261e;
   --grid: #e6ebe8;
   --axis: #c7cfcb;
   --seq-0: #e9f1fb;
@@ -57,6 +59,8 @@
     --accent-soft: #1b2a3f;
     --select: #f08a5a;
     --select-soft: #3d2416;
+    --good: #4cc38a;
+    --bad: #f08a80;
     --grid: #232b27;
     --axis: #3a453f;
     --seq-0: #1a2230;
@@ -93,6 +97,8 @@
   --accent-soft: #1b2a3f;
   --select: #f08a5a;
   --select-soft: #3d2416;
+  --good: #4cc38a;
+  --bad: #f08a80;
   --grid: #232b27;
   --axis: #3a453f;
   --seq-0: #1a2230;
@@ -225,6 +231,13 @@ button, select, input { font: inherit; color: inherit; }
 .platform .p-sub { color: var(--muted); font-size: 12px; text-align: right; }
 .platform .p-bar { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--grid); overflow: hidden; margin-top: 4px; }
 .platform .p-bar i { display: block; height: 100%; background: var(--bar); }
+.platform .p-delta { grid-column: 1 / -1; }
+.kpi-delta, .p-delta { font-size: 12px; color: var(--muted); line-height: 1.35; }
+.kpi-delta.good, .p-delta.good, td.good { color: var(--good); font-weight: 600; }
+.kpi-delta.bad, .p-delta.bad, td.bad { color: var(--bad); font-weight: 600; }
+.period-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.goals-note { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.4; }
+#months-table tbody tr:last-child td, #goals-table tbody tr.total td { font-weight: 700; border-top: 1px solid var(--hairline-2); }
 
 /* ---------- cards / grid ---------- */
 .grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 14px; margin-bottom: 14px; }
@@ -417,7 +430,10 @@ footer p { margin: 4px 0; }
 <section class="filters" aria-label="Filtros">
   <div class="field">
     <label>Período</label>
-    <div class="presets" id="presets" role="group" aria-label="Períodos rápidos"></div>
+    <div class="period-row">
+      <div class="presets" id="presets" role="group" aria-label="Períodos rápidos"></div>
+      <select id="year-select" aria-label="Escolher ano"></select>
+    </div>
   </div>
   <div class="field">
     <label for="date-from">Datas</label>
@@ -425,6 +441,7 @@ footer p { margin: 4px 0; }
       <input type="date" id="date-from"><span>até</span><input type="date" id="date-to">
     </div>
   </div>
+  <div class="field" id="cmp-field"><label for="cmp-base">Comparar com</label><select id="cmp-base"><option value="mes">Mês anterior (mesmo período)</option><option value="ano">Ano anterior (mesmo período)</option></select></div>
   <div class="field"><label for="f-region">Região</label><select id="f-region"></select></div>
   <div class="field"><label for="f-state">Estado</label><select id="f-state"></select></div>
   <div class="field"><label for="f-city">Cidade</label><select id="f-city"></select></div>
@@ -438,6 +455,21 @@ footer p { margin: 4px 0; }
 
 <section class="kpis" id="kpis" aria-label="Indicadores"></section>
 <section class="platforms" id="platforms" aria-label="Vendas por plataforma"></section>
+
+<section class="grid-2" aria-label="Comparativo e metas" style="grid-template-columns: 1fr">
+  <div class="card">
+    <div class="card-head"><h2>Comparativo e metas</h2><span class="hint" id="cmp-hint"></span></div>
+    <div class="table-wrap"><table id="goals-table">
+      <thead><tr><th>Canal</th><th class="n">Realizado</th><th class="n">Período anterior</th><th class="n">Diferença</th><th class="n">Variação</th><th class="n">Meta</th><th class="n">% da meta</th><th class="n">Falta / sobra</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="goals-note" id="goals-note"></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2 id="months-title">Acompanhamento mês a mês</h2><span class="hint">Realizado x meta de cada mês</span></div>
+    <div class="table-wrap"><table id="months-table"></table></div>
+  </div>
+</section>
 
 <section class="grid">
   <div class="card">
@@ -733,11 +765,10 @@ footer p { margin: 4px 0; }
   const MONTH_START = Math.max(0, dateToDay(new Date(LAST_DATE.getFullYear(), LAST_DATE.getMonth(), 1)));
   const DEFAULTS = { from: MONTH_START, to: LAST, preset: 'mes', region: '', state: -1, city: -1, hood: -1, type: -1, product: -1, channel: -1, platform: '' };
   const F = { ...DEFAULTS };
+  // o ano fica no seletor próprio (começa no ano atual); os botões são períodos rápidos
   const PRESETS = [['all', 'Todo o período', () => [0, LAST]]];
-  for (let y = LAST_DATE.getFullYear(); y >= EPOCH.getFullYear() && PRESETS.length < 4; y--) {
-    PRESETS.push([String(y), String(y), () => [Math.max(0, dateToDay(new Date(y, 0, 1))), Math.min(LAST, dateToDay(new Date(y, 11, 31)))]]);
-  }
   PRESETS.push(['mes', 'Mês atual', () => [Math.max(0, dateToDay(new Date(LAST_DATE.getFullYear(), LAST_DATE.getMonth(), 1))), LAST]],
+    ['mes_ant', 'Mês anterior', () => [Math.max(0, dateToDay(new Date(LAST_DATE.getFullYear(), LAST_DATE.getMonth() - 1, 1))), Math.min(LAST, dateToDay(new Date(LAST_DATE.getFullYear(), LAST_DATE.getMonth(), 0)))]],
     ['12m', 'Últimos 12 meses', () => [LAST - 364, LAST]], ['90d', 'Últimos 90 dias', () => [LAST - 89, LAST]], ['30d', 'Últimos 30 dias', () => [LAST - 29, LAST]]);
 
   const $ = id => document.getElementById(id);
@@ -748,7 +779,7 @@ footer p { margin: 4px 0; }
 
   // ---------- agregação ----------
   const seen = new Uint8Array(NORDERS);
-  function aggregate() {
+  function aggregate(from = F.from, to = F.to) {
     seen.fill(0);
     const byState = D.states.map(() => ({ rev: 0, items: 0, orders: 0 }));
     const byCity = new Map(), byProduct = new Map(), byType = new Map(), byMonth = new Map(), byRegion = new Map(), byHood = new Map();
@@ -758,7 +789,7 @@ footer p { margin: 4px 0; }
     for (let i = 0; i < ROWS.length; i++) {
       const r = ROWS[i];
       const day = r[C.day];
-      if (day < F.from || day > F.to) continue;
+      if (day < from || day > to) continue;
       const s = r[C.state];
       if (F.region && (s < 0 ? F.region !== 'X' : !stateInRegion[s])) continue;
       if (F.state >= 0 && s !== F.state) continue;
@@ -799,6 +830,11 @@ footer p { margin: 4px 0; }
     $('date-to').min = iso(dayToDate(0)); $('date-to').max = iso(LAST_DATE);
     $('date-from').addEventListener('change', e => { const d = e.target.valueAsDate; if (!d) return; F.from = Math.min(Math.max(0, dateToDay(d)), F.to); F.preset = ''; update(); });
     $('date-to').addEventListener('change', e => { const d = e.target.valueAsDate; if (!d) return; F.to = Math.max(Math.min(LAST, dateToDay(d)), F.from); F.preset = ''; update(); });
+    const ys = $('year-select');
+    for (let y = LAST_DATE.getFullYear(); y >= EPOCH.getFullYear(); y--) ys.appendChild(new Option(String(y), String(y)));
+    ys.value = String(LAST_DATE.getFullYear());
+    ys.addEventListener('change', e => { const y = +e.target.value; F.from = Math.max(0, dateToDay(new Date(y, 0, 1))); F.to = Math.min(LAST, dateToDay(new Date(y, 11, 31))); F.preset = 'ano'; update(); });
+    $('cmp-base').addEventListener('change', e => { CMP = e.target.value; update(); });
 
     fillSelect($('f-region'), [['', 'Todas as regiões'], ...D.regions.map(r => [r.code, r.name]), ['X', 'Sem endereço']]);
     $('f-region').addEventListener('change', e => { F.region = e.target.value; if (F.state >= 0 && F.region && D.states[F.state].region !== F.region) { F.state = -1; F.city = -1; } if (F.region === 'X') { F.state = -1; F.city = -1; } update(); });
@@ -846,6 +882,8 @@ footer p { margin: 4px 0; }
     $('presets').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.key === F.preset)));
     revealPreset($('presets'));
     $('date-from').value = iso(dayToDate(F.from)); $('date-to').value = iso(dayToDate(F.to));
+    $('cmp-field').hidden = F.preset === 'all';
+    $('cmp-base').value = CMP;
     $('f-region').value = F.region;
     const stateOpts = [[-1, F.region ? 'Todos os estados da região' : 'Todos os estados'], ...D.states.map((s, i) => [i, s.uf + ' · ' + s.name]).filter(([i]) => !F.region || D.states[i].region === F.region)];
     fillSelect($('f-state'), stateOpts, String(F.state));
@@ -892,12 +930,14 @@ footer p { margin: 4px 0; }
     if (F.hood >= 0 && (F.city < 0 || HOODS[F.hood][1] !== F.city)) F.hood = -1;
     syncControls();
     A = aggregate();
+    CMP_RANGE = F.preset !== 'all' ? shiftRange(F.from, F.to, cmpUnit()) : null;
+    PREV = CMP_RANGE ? { A: aggregate(CMP_RANGE[0], CMP_RANGE[1]) } : null;
     if (F.state >= 0 || F.city >= 0) {
       const saveS = F.state, saveC = F.city, saveH = F.hood; F.state = -1; F.city = -1; F.hood = -1;
       const base = aggregate(); baseState = base.byState; baseRegion = base.byRegion; F.state = saveS; F.city = saveC; F.hood = saveH;
     } else { baseState = A.byState; baseRegion = A.byRegion; }
     cityLimit = 25; prodLimit = 25; hoodLimit = 15;
-    renderKpis(); renderMap(); renderRegions(); renderTrend(); renderProductChart(); renderTypes(); renderCities(); renderHoodCard(); renderProducts(); renderMeta();
+    renderKpis(); renderMap(); renderRegions(); renderTrend(); renderProductChart(); renderTypes(); renderCities(); renderHoodCard(); renderProducts(); renderMeta(); renderGoals(); renderMonths();
   }
 
   function scopeLabel() {
@@ -920,14 +960,18 @@ footer p { margin: 4px 0; }
     const t = A.tot;
     let cities = 0; for (const k of A.byCity.keys()) if (D.cities[k][1] >= 0) cities++;
     const states = A.byState.filter(s => s.orders > 0).length;
+    const p = PREV ? PREV.A.tot : null;
+    const ticket = x => (x.orders ? x.rev / x.orders : null), ppo = x => (x.orders ? x.items / x.orders : null);
+    const fmtNum = v => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
     const tiles = [
-      ['Receita líquida', fmtBRL.format(t.rev), 'bruta ' + fmtBRL.format(t.gross)],
-      ['Pedidos', fmtInt.format(t.orders), fmtInt.format(t.items) + ' itens'],
-      ['Ticket médio', t.orders ? fmtBRL2.format(t.rev / t.orders) : '—', 'por pedido'],
-      ['Cidades atendidas', fmtInt.format(cities), states + (states === 1 ? ' estado' : ' estados') + ' · frete ' + fmtBRL.format(t.ship)],
+      ['Receita líquida', fmtBRL.format(t.rev), 'bruta ' + fmtBRL.format(t.gross), p && deltaEl(t.rev, p.rev, v => fmtBRL.format(v))],
+      ['Pedidos', fmtInt.format(t.orders), fmtInt.format(t.items) + ' itens', p && deltaEl(t.orders, p.orders, v => fmtInt.format(v))],
+      ['Ticket médio', t.orders ? fmtBRL2.format(t.rev / t.orders) : '—', 'por pedido', p && deltaEl(ticket(t), ticket(p), v => fmtBRL2.format(v))],
+      ['Peças por pedido', t.orders ? fmtNum(t.items / t.orders) : '—', 'itens por pedido', p && deltaEl(ppo(t), ppo(p), fmtNum)],
+      ['Cidades atendidas', fmtInt.format(cities), states + (states === 1 ? ' estado' : ' estados') + ' · frete ' + fmtBRL.format(t.ship), null],
     ];
     const k = $('kpis'); k.replaceChildren();
-    for (const [label, value, sub] of tiles) { const c = el('div', 'kpi'); c.append(el('div', 'eyebrow', label), el('div', 'kpi-value num', value), el('div', 'kpi-sub', sub)); k.appendChild(c); }
+    for (const [label, value, sub, delta] of tiles) { const c = el('div', 'kpi'); c.append(el('div', 'eyebrow', label), el('div', 'kpi-value num', value), el('div', 'kpi-sub', sub)); if (delta) c.appendChild(delta); k.appendChild(c); }
     renderPlatforms();
   }
 
@@ -944,9 +988,120 @@ footer p { margin: 4px 0; }
       b.append(el('span', 'p-name', name), el('span', 'p-share num', total > 0 ? fmtPct.format(share) + ' da receita' : '—'),
         el('span', 'p-value num', fmtBRL.format(g.rev)),
         el('span', 'p-sub num', fmtInt.format(g.orders) + (g.orders === 1 ? ' pedido' : ' pedidos') + (g.orders ? ' · ticket ' + fmtBRL.format(g.rev / g.orders) : '')), bar);
+      const pv = PREV ? PREV.A.byGroup.get(name) : null;
+      const d = pv ? deltaEl(g.rev, pv.rev, v => fmtBRL.format(v), 'p-delta') : null;
+      if (d) b.insertBefore(d, bar);
       b.addEventListener('click', () => { F.platform = F.platform === name ? '' : name; update(); });
       wrap.appendChild(b);
     }
+  }
+
+  // ----- comparativo e metas: loja toda por canal (sem os filtros de região, estado, cidade ou produto) -----
+  let GOALS = { canais: {} }, CMP = 'mes', CMP_RANGE = null, PREV = null;
+  // período longo (mais de ~4 meses, como ano ou 12 meses) compara com o ano anterior; o resto segue a escolha
+  function cmpUnit() { return F.to - F.from > 120 ? 'ano' : CMP; }
+  // período deslocado 1 mês (ou 12) para trás, com o mesmo dia do mês quando existir
+  function shiftRange(a, b, unit) {
+    const n = unit === 'ano' ? 12 : 1;
+    const back = d => { const dt = dayToDate(d), m = dt.getMonth() - n, y = dt.getFullYear(); const last = new Date(y, m + 1, 0).getDate(); return Math.max(0, dateToDay(new Date(y, m, Math.min(dt.getDate(), last)))); };
+    return [back(a), back(b)];
+  }
+  function sumByGroup(a, b) {
+    const out = {}; for (const g of PLATFORMS) out[g] = 0;
+    for (const r of ROWS) { const d = r[C.day]; if (d < a || d > b) continue; out[CHANNEL_GROUP[r[C.channel]]] += r[C.net]; }
+    return out;
+  }
+  function monthTarget(cfg, m) {
+    const key = Math.floor(m / 12) + '-' + String((m % 12) + 1).padStart(2, '0');
+    if (cfg.mensal && cfg.mensal[key] != null) return +cfg.mensal[key];
+    return cfg.anual != null ? +cfg.anual / 12 : null;
+  }
+  // meta do canal para o intervalo [a, b] (em dias); null = sem meta cadastrada
+  function goalFor(g, a, b) {
+    const cfg = GOALS.canais && GOALS.canais[g];
+    if (!cfg) return null;
+    if (cfg.tipo === 'valor') {
+      let total = 0, any = false;
+      for (let m = monthKey(a); m <= monthKey(b); m++) {
+        const v = monthTarget(cfg, m); if (v == null) continue;
+        const y = Math.floor(m / 12), mo = m % 12;
+        const ms = Math.max(a, dateToDay(new Date(y, mo, 1))), me = Math.min(b, dateToDay(new Date(y, mo + 1, 0)));
+        any = true;
+        if (me >= ms) total += v * (me - ms + 1) / new Date(y, mo + 1, 0).getDate();
+      }
+      return any ? total : null;
+    }
+    if (cfg.tipo === 'crescimento') {
+      const [pa, pb] = shiftRange(a, b, cfg.base === 'ano' ? 'ano' : 'mes');
+      return sumByGroup(pa, pb)[g] * (1 + (+cfg.percentual || 0) / 100);
+    }
+    return null;
+  }
+  function deltaEl(cur, prev, fmt, cls = 'kpi-delta') {
+    if (cur == null || prev == null) return null;
+    const d = el('div', cls), diff = cur - prev;
+    if (!prev) { d.textContent = 'sem base no período anterior'; return d; }
+    d.classList.add(diff >= 0 ? 'good' : 'bad');
+    d.textContent = (diff >= 0 ? '+' : '−') + fmt(Math.abs(diff)) + ' (' + (diff >= 0 ? '+' : '−') + fmtPct.format(Math.abs(diff) / Math.abs(prev)) + ') vs período anterior';
+    return d;
+  }
+  function goalRow(name, rev, prev, target, total) {
+    const tr = el('tr', total ? 'total' : null);
+    const num = (text, cls) => el('td', ['n', cls].filter(Boolean).join(' '), text);
+    const sign = v => (v >= 0 ? '+' : '−');
+    const diff = prev == null ? null : rev - prev, gap = target == null ? null : rev - target;
+    const dCls = diff == null ? '' : diff >= 0 ? 'good' : 'bad', gCls = gap == null ? '' : gap >= 0 ? 'good' : 'bad';
+    tr.append(el('td', null, name), num(fmtBRL.format(rev)),
+      num(prev == null ? '—' : fmtBRL.format(prev)),
+      num(diff == null ? '—' : sign(diff) + fmtBRL.format(Math.abs(diff)), dCls),
+      num(!prev ? '—' : sign(diff) + fmtPct.format(Math.abs(diff) / Math.abs(prev)), prev ? dCls : ''),
+      num(target == null ? 'sem meta' : fmtBRL.format(target)),
+      num(!target ? '—' : fmtPct.format(rev / target)),
+      num(gap == null ? '—' : sign(gap) + fmtBRL.format(Math.abs(gap)), gCls));
+    return tr;
+  }
+  function renderGoals() {
+    const a = F.from, b = F.to, cur = sumByGroup(a, b);
+    const pr = CMP_RANGE ? sumByGroup(CMP_RANGE[0], CMP_RANGE[1]) : null;
+    const unitTxt = cmpUnit() === 'ano' ? 'ano anterior' : 'mês anterior';
+    $('cmp-hint').textContent = CMP_RANGE ? unitTxt + ': ' + fmtDate.format(dayToDate(CMP_RANGE[0])) + ' – ' + fmtDate.format(dayToDate(CMP_RANGE[1])) : 'sem comparação em "Todo o período"';
+    const tbody = $('goals-table').tBodies[0]; tbody.replaceChildren();
+    let tr = 0, tp = 0, tt = 0, hasP = false, hasT = false;
+    for (const g of PLATFORMS) {
+      const rev = cur[g], prev = pr ? pr[g] : null, target = goalFor(g, a, b);
+      tr += rev; if (prev != null) { tp += prev; hasP = true; } if (target != null) { tt += target; hasT = true; }
+      tbody.appendChild(goalRow(g, rev, prev, target, false));
+    }
+    tbody.appendChild(goalRow('Total', tr, hasP ? tp : null, hasT ? tt : null, true));
+    const anyGoal = Object.keys(GOALS.canais || {}).length > 0;
+    $('goals-note').textContent = (anyGoal ? 'Total = soma das metas cadastradas. ' : 'Nenhuma meta cadastrada ainda: edite dashboard/metas.json. ') +
+      'Esta tabela considera a loja toda, sem os filtros de região, estado, cidade ou produto.';
+  }
+  function renderMonths() {
+    const y = +$('year-select').value;
+    $('months-title').textContent = 'Acompanhamento mês a mês · ' + y;
+    const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' });
+    const thead = el('thead'), hr = el('tr');
+    const heads = ['Mês', 'Realizado', 'Meta', '% da meta', 'Acumulado', 'Meta acumulada', '% acumulado', ...PLATFORMS.map(g => '% ' + g)];
+    heads.forEach((h, i) => hr.appendChild(el('th', i ? 'n' : null, h)));
+    thead.appendChild(hr);
+    const tbody = el('tbody');
+    let accR = 0, accT = 0;
+    for (let mo = 0; mo < 12; mo++) {
+      const ms = dateToDay(new Date(y, mo, 1)), me = dateToDay(new Date(y, mo + 1, 0));
+      if (ms > LAST) break;
+      const real = sumByGroup(ms, Math.min(me, LAST));
+      const realTot = PLATFORMS.reduce((s, g) => s + real[g], 0);
+      let tgt = null; const perG = {};
+      for (const g of PLATFORMS) { perG[g] = goalFor(g, ms, me); if (perG[g] != null) tgt = (tgt || 0) + perG[g]; }
+      accR += realTot; if (tgt != null) accT += tgt;
+      const name = monthName.format(new Date(y, mo, 1)).replace(/^./, c => c.toUpperCase()) + (me > LAST ? ' (parcial)' : '');
+      const cells = [name, fmtBRL.format(realTot), tgt == null ? 'sem meta' : fmtBRL.format(tgt), tgt ? fmtPct.format(realTot / tgt) : '—',
+        fmtBRL.format(accR), accT ? fmtBRL.format(accT) : '—', accT ? fmtPct.format(accR / accT) : '—',
+        ...PLATFORMS.map(g => (perG[g] ? fmtPct.format(real[g] / perG[g]) : '—'))];
+      const row = el('tr'); cells.forEach((c, i) => row.appendChild(el('td', i ? 'n' : null, c))); tbody.appendChild(row);
+    }
+    $('months-table').replaceChildren(thead, tbody);
   }
 
   // ----- mapa -----
@@ -1810,6 +1965,8 @@ footer p { margin: 4px 0; }
   update();
   setupMeta();
   setupGa();
+  // metas por canal (dashboard/metas.json); sem o arquivo, o painel mostra "sem meta"
+  fetch('metas.json', { cache: 'no-cache' }).then(r => (r.ok ? r.json() : null)).then(j => { if (j && j.canais) { GOALS = j; update(); } }).catch(() => {});
   showView(viewFromHash());
 })();
 </script>
