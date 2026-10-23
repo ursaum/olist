@@ -55,6 +55,12 @@ def num(x):
     return int(f) if f == int(f) else round(f, 2)
 
 
+def city_name(v):
+    """Cidade preenchida só com números (ex.: "88412") é erro de cadastro: vira vazia."""
+    v = (v or "").strip()
+    return "" if v.isdigit() else v
+
+
 def convert(raw, month):
     year, mon = (int(v) for v in month.split("-"))
     since = f"{year:04d}-{mon:02d}-01"
@@ -81,8 +87,10 @@ def convert(raw, month):
         if not since <= day <= until:
             raise SystemExit(f"linha fora do mês {month}: {day} {r[ix['order_name']]}")
         br = "" if r[ix["billing_region"]] == r[ix["shipping_region"]] else r[ix["billing_region"]]
-        bc = "" if r[ix["billing_city"]] == r[ix["shipping_city"]] else r[ix["billing_city"]]
-        text = [day, opaque_id(r[ix["order_name"]]), r[ix["shipping_region"]], r[ix["shipping_city"]],
+        sc = city_name(r[ix["shipping_city"]])
+        bc = city_name(r[ix["billing_city"]])
+        bc = "" if bc == sc else bc
+        text = [day, opaque_id(r[ix["order_name"]]), r[ix["shipping_region"]], sc,
                 br, bc, r[ix["sales_channel"]], r[ix["product_type"]], r[ix["product_title"]]]
         nums = [num(r[ix[c]]) for c in KEEP[N_TEXT:]]
         hood = bairros.get(clean_cep(r[ix["shipping_postal_code"]]), "") if has_cep else ""
@@ -111,7 +119,8 @@ def main():
     path = os.path.join(args.out, f"sales-{args.month}.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(data, fh, ensure_ascii=False, separators=(",", ":"))
-    orders = len({r[1] for r in data["rows"]})
+    # pedido conta só com linha de venda (itens ou valor bruto); devolução de pedido antigo não é pedido novo
+    orders = len({r[1] for r in data["rows"] if r[9] > 0 or r[10] > 0})
     net = sum(r[13] for r in data["rows"])
     print(f"{path}: {len(data['rows'])} linhas, {orders} pedidos, receita líquida R$ {net:,.2f}, "
           f"{data['replaces_days']['since']} a {data['replaces_days']['until']}")

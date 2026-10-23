@@ -289,6 +289,9 @@ td .place { display: block; color: var(--muted); font-size: 11.5px; }
 .chart .baseline { stroke: var(--axis); stroke-width: 1; }
 .chart .bar { fill: var(--bar); }
 .chart .bar.hover { fill: var(--bar-hover); }
+.chart .bar.up { fill: var(--good); }
+.chart .bar.down { fill: var(--bad); }
+.chart .vlabel { font-size: 12px; font-weight: 600; fill: var(--ink); }
 .chart .hit { fill: transparent; cursor: default; }
 .chart .crosshair { stroke: var(--axis); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
 .chart .dlabel { fill: var(--ink); font-size: 11.5px; font-weight: 500; }
@@ -455,6 +458,13 @@ footer p { margin: 4px 0; }
 
 <section class="kpis" id="kpis" aria-label="Indicadores"></section>
 <section class="platforms" id="platforms" aria-label="Vendas por plataforma"></section>
+
+<section class="grid-2" aria-label="Variação vs período anterior" style="grid-template-columns: 1fr">
+  <div class="card">
+    <div class="card-head"><h2>Variação vs período anterior</h2><span class="hint" id="var-hint"></span></div>
+    <div class="chart" id="var-chart"></div>
+  </div>
+</section>
 
 <section class="grid-2" aria-label="Comparativo e metas" style="grid-template-columns: 1fr">
   <div class="card">
@@ -799,8 +809,11 @@ footer p { margin: 4px 0; }
       if (F.product >= 0 && r[C.product] !== F.product) continue;
       if (F.channel >= 0 && r[C.channel] !== F.channel) continue;
       if (F.platform && CHANNEL_GROUP[r[C.channel]] !== F.platform) continue;
-      const rev = r[C.net], items = r[C.items], o = r[C.order];
-      const newOrder = seen[o] === 0; if (newOrder) seen[o] = 1;
+      const rev = r[C.net], items = r[C.items];
+      // devolução de pedido de outro mês não é pedido novo: só linha com venda conta como pedido
+      const sale = items > 0 || r[C.gross] > 0;
+      const o = sale ? r[C.order] : -1;
+      const newOrder = o >= 0 && seen[o] === 0; if (newOrder) seen[o] = 1;
       const g = byGroup.get(CHANNEL_GROUP[r[C.channel]]); g.rev += rev; g.items += items; if (newOrder) g.orders++;
       tot.rev += rev; tot.gross += r[C.gross]; tot.disc += r[C.disc]; tot.ret += r[C.ret]; tot.ship += r[C.ship]; tot.items += items; if (newOrder) tot.orders++;
       if (s >= 0) { const st = byState[s]; st.rev += rev; st.items += items; if (newOrder) st.orders++; }
@@ -815,7 +828,7 @@ footer p { margin: 4px 0; }
   function bump(map, key, rev, items, o) {
     let e = map.get(key);
     if (!e) { e = { rev: 0, items: 0, orders: 0, _o: new Set() }; map.set(key, e); }
-    e.rev += rev; e.items += items; if (!e._o.has(o)) { e._o.add(o); e.orders++; }
+    e.rev += rev; e.items += items; if (o >= 0 && !e._o.has(o)) { e._o.add(o); e.orders++; }
   }
 
   // ---------- controles ----------
@@ -937,7 +950,7 @@ footer p { margin: 4px 0; }
       const base = aggregate(); baseState = base.byState; baseRegion = base.byRegion; F.state = saveS; F.city = saveC; F.hood = saveH;
     } else { baseState = A.byState; baseRegion = A.byRegion; }
     cityLimit = 25; prodLimit = 25; hoodLimit = 15;
-    renderKpis(); renderMap(); renderRegions(); renderTrend(); renderProductChart(); renderTypes(); renderCities(); renderHoodCard(); renderProducts(); renderMeta(); renderGoals(); renderMonths();
+    renderKpis(); renderMap(); renderRegions(); renderTrend(); renderProductChart(); renderTypes(); renderCities(); renderHoodCard(); renderProducts(); renderMeta(); renderGoals(); renderMonths(); renderVariation();
   }
 
   function scopeLabel() {
@@ -1006,6 +1019,13 @@ footer p { margin: 4px 0; }
     const back = d => { const dt = dayToDate(d), m = dt.getMonth() - n, y = dt.getFullYear(); const last = new Date(y, m + 1, 0).getDate(); return Math.max(0, dateToDay(new Date(y, m, Math.min(dt.getDate(), last)))); };
     return [back(a), back(b)];
   }
+  function cmpUnitFor(from, to) { return to - from > 120 ? 'ano' : CMP; }
+  // mesmo intervalo de dias, um mês (ou ano) antes; epoch é o dia 0 da aba (Meta ou GA)
+  function shiftSpan(a, b, epoch, unit) {
+    const n = unit === 'ano' ? 12 : 1;
+    const back = d => { const dt = new Date(epoch.getTime() + d * 864e5), m = dt.getMonth() - n, y = dt.getFullYear(); const last = new Date(y, m + 1, 0).getDate(); return Math.max(0, Math.round((new Date(y, m, Math.min(dt.getDate(), last)).getTime() - epoch.getTime()) / 864e5)); };
+    return [back(a), back(b)];
+  }
   function sumByGroup(a, b) {
     const out = {}; for (const g of PLATFORMS) out[g] = 0;
     for (const r of ROWS) { const d = r[C.day]; if (d < a || d > b) continue; out[CHANNEL_GROUP[r[C.channel]]] += r[C.net]; }
@@ -1037,11 +1057,11 @@ footer p { margin: 4px 0; }
     }
     return null;
   }
-  function deltaEl(cur, prev, fmt, cls = 'kpi-delta') {
+  function deltaEl(cur, prev, fmt, cls = 'kpi-delta', invert = false) {
     if (cur == null || prev == null) return null;
     const d = el('div', cls), diff = cur - prev;
     if (!prev) { d.textContent = 'sem base no período anterior'; return d; }
-    d.classList.add(diff >= 0 ? 'good' : 'bad');
+    d.classList.add((diff >= 0) !== invert ? 'good' : 'bad');
     d.textContent = (diff >= 0 ? '+' : '−') + fmt(Math.abs(diff)) + ' (' + (diff >= 0 ? '+' : '−') + fmtPct.format(Math.abs(diff) / Math.abs(prev)) + ') vs período anterior';
     return d;
   }
@@ -1102,6 +1122,41 @@ footer p { margin: 4px 0; }
       const row = el('tr'); cells.forEach((c, i) => row.appendChild(el('td', i ? 'n' : null, c))); tbody.appendChild(row);
     }
     $('months-table').replaceChildren(thead, tbody);
+  }
+
+  // ----- variação vs período anterior: colunas para cada indicador e canal -----
+  function renderVariation() {
+    const host = $('var-chart'); host.replaceChildren();
+    $('var-hint').textContent = CMP_RANGE ? (cmpUnit() === 'ano' ? 'contra o ano anterior' : 'contra o mês anterior') : '';
+    if (!PREV) { host.appendChild(el('div', 'empty', 'Escolha um período de comparação para ver a variação.')); return; }
+    const t = A.tot, p = PREV.A.tot;
+    const pct = (c, b) => (c != null && b ? (c - b) / Math.abs(b) : null);
+    const items = [
+      ['Receita líquida', pct(t.rev, p.rev)],
+      ['Pedidos', pct(t.orders, p.orders)],
+      ['Ticket médio', pct(t.orders ? t.rev / t.orders : null, p.orders ? p.rev / p.orders : null)],
+      ['Peças por pedido', pct(t.orders ? t.items / t.orders : null, p.orders ? p.items / p.orders : null)],
+      ...PLATFORMS.map(g => [g, pct(A.byGroup.get(g).rev, PREV.A.byGroup.get(g).rev)]),
+    ].filter(([, v]) => v != null);
+    if (!items.length) { host.appendChild(el('div', 'empty', 'Sem base no período anterior para comparar.')); return; }
+    const W = chartWidth(host), H = 250, padL = 16, padR = 16, padT = 28, padB = 40;
+    const iw = W - padL - padR, ih = H - padT - padB;
+    const maxAbs = Math.max(0.05, ...items.map(([, v]) => Math.abs(v))) * 1.15;
+    const y0 = padT + ih / 2;
+    const y = v => y0 - (v / maxAbs) * (ih / 2);
+    const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Variação vs período anterior' });
+    svg.appendChild(svgEl('line', { x1: padL, x2: W - padR, y1: y0, y2: y0, class: 'baseline' }));
+    const n = items.length, slot = iw / n, bw = Math.max(14, Math.min(56, slot * 0.6));
+    items.forEach(([name, v], i) => {
+      const cx = padL + i * slot + slot / 2, yv = y(v);
+      svg.appendChild(svgEl('rect', { x: cx - bw / 2, y: Math.min(yv, y0), width: bw, height: Math.max(1, Math.abs(yv - y0)), rx: 4, class: 'bar ' + (v >= 0 ? 'up' : 'down') }));
+      const lab = svgEl('text', { x: cx, y: v >= 0 ? yv - 7 : yv + 16, 'text-anchor': 'middle', class: 'vlabel' });
+      lab.textContent = (v >= 0 ? '+' : '−') + fmtPct.format(Math.abs(v));
+      svg.appendChild(lab);
+      const cat = svgEl('text', { x: cx, y: H - padB + 18, 'text-anchor': 'middle' });
+      cat.textContent = name; svg.appendChild(cat);
+    });
+    host.appendChild(svg);
   }
 
   // ----- mapa -----
@@ -1428,7 +1483,7 @@ footer p { margin: 4px 0; }
   const fmtX = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtPct2 = new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const hasMeta = !!(MD && MD.rows && MD.rows.length);
-  let MF = null, MPRESETS = [], MLAST = 0, MEPOCH = null, campSort = { key: 'spend', dir: 'desc' };
+  let MF = null, MPRESETS = [], MLAST = 0, MEPOCH = null, campSort = { key: 'spend', dir: 'desc' }, MPREV = null;
   const mDayToDate = d => new Date(MEPOCH.getTime() + d * 864e5);
   const mDateToDay = dt => Math.round((dt.getTime() - MEPOCH.getTime()) / 864e5);
   const mMonthKey = d => { const dt = mDayToDate(d); return dt.getFullYear() * 12 + dt.getMonth(); };
@@ -1475,12 +1530,12 @@ footer p { margin: 4px 0; }
   }
 
   let MA = null;
-  function aggregateMeta() {
+  function aggregateMeta(from = MF.from, to = MF.to) {
     const tot = { spend: 0, impr: 0, clicks: 0, link: 0, purch: 0, value: 0 };
     const byMonth = new Map(), byCamp = new Map();
     for (const r of MD.rows) {
       const d = r[MC.day];
-      if (d < MF.from || d > MF.to) continue;
+      if (d < from || d > to) continue;
       const c = r[MC.camp];
       if (MF.camp >= 0 && c !== MF.camp) continue;
       if (MF.status && MD.campaigns[c].status !== MF.status) continue;
@@ -1491,13 +1546,14 @@ footer p { margin: 4px 0; }
       e.spend += r[MC.spend]; e.impr += r[MC.impr]; e.clicks += r[MC.clicks]; e.link += r[MC.link]; e.purch += r[MC.purch]; e.value += r[MC.value];
     }
     // receita da loja no mesmo intervalo de datas (todas as fontes), para contexto
-    const a = dateToDay(mDayToDate(MF.from)), z = dateToDay(mDayToDate(MF.to));
+    const a = dateToDay(mDayToDate(from)), z = dateToDay(mDayToDate(to));
     let storeNet = 0; for (const r of ROWS) if (r[C.day] >= a && r[C.day] <= z) storeNet += r[C.net];
     return { tot, byMonth, byCamp, storeNet };
   }
 
   function updateMeta() {
     MA = aggregateMeta();
+    { const [pa, pz] = shiftSpan(MF.from, MF.to, MEPOCH, cmpUnitFor(MF.from, MF.to)); MPREV = MF.preset !== 'all' ? aggregateMeta(pa, pz) : null; }
     $('m-presets').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.key === MF.preset)));
     revealPreset($('m-presets'));
     $('m-date-from').value = iso(mDayToDate(MF.from)); $('m-date-to').value = iso(mDayToDate(MF.to));
@@ -1559,18 +1615,20 @@ footer p { margin: 4px 0; }
   function renderMetaKpis() {
     const t = MA.tot, roas = t.spend ? t.value / t.spend : 0, cpa = t.purch ? t.spend / t.purch : 0;
     const share = MA.storeNet > 0 ? t.value / MA.storeNet : null;
+    const p = MPREV ? MPREV.tot : null;
+    const pRoas = p && p.spend ? p.value / p.spend : null, pCpa = p && p.purch ? p.spend / p.purch : null, pCpc = p && p.link ? p.spend / p.link : null;
     const tiles = [
-      ['Investimento', fmtBRL.format(t.spend), (MF.to - MF.from + 1) + ' dias · ' + fmtBRL2.format(t.spend / (MF.to - MF.from + 1)) + '/dia'],
-      ['Vendas atribuídas', fmtInt.format(t.purch), t.link ? fmtPct2.format(t.purch / t.link) + ' dos cliques no link' : ''],
-      ['Valor das vendas', fmtBRL.format(t.value), share != null ? fmtPct.format(share) + ' da receita da loja no período' : ''],
-      ['ROAS', t.spend ? fmtX.format(roas) + '×' : '—', 'valor das vendas ÷ investimento'],
-      ['Custo por venda', t.purch ? fmtBRL2.format(cpa) : '—', t.purch ? 'ticket médio ' + fmtBRL2.format(t.value / t.purch) : 'sem vendas no recorte'],
-      ['Cliques no link', fmtInt.format(t.link), t.impr ? 'CTR ' + fmtPct2.format(t.link / t.impr) : ''],
-      ['CPC', t.link ? fmtBRL2.format(t.spend / t.link) : '—', 'por clique no link'],
-      ['Impressões', fmtInt.format(t.impr), t.impr ? 'CPM ' + fmtBRL2.format(t.spend / t.impr * 1000) : ''],
+      ['Investimento', fmtBRL.format(t.spend), (MF.to - MF.from + 1) + ' dias · ' + fmtBRL2.format(t.spend / (MF.to - MF.from + 1)) + '/dia', p && deltaEl(t.spend, p.spend, v => fmtBRL.format(v), 'kpi-delta', true)],
+      ['Vendas atribuídas', fmtInt.format(t.purch), t.link ? fmtPct2.format(t.purch / t.link) + ' dos cliques no link' : '', p && deltaEl(t.purch, p.purch, v => fmtInt.format(v))],
+      ['Valor das vendas', fmtBRL.format(t.value), share != null ? fmtPct.format(share) + ' da receita da loja no período' : '', p && deltaEl(t.value, p.value, v => fmtBRL.format(v))],
+      ['ROAS', t.spend ? fmtX.format(roas) + '×' : '—', 'valor das vendas ÷ investimento', p && deltaEl(roas, pRoas, v => fmtX.format(v) + '×')],
+      ['Custo por venda', t.purch ? fmtBRL2.format(cpa) : '—', t.purch ? 'ticket médio ' + fmtBRL2.format(t.value / t.purch) : 'sem vendas no recorte', p && deltaEl(cpa, pCpa, v => fmtBRL2.format(v), 'kpi-delta', true)],
+      ['Cliques no link', fmtInt.format(t.link), t.impr ? 'CTR ' + fmtPct2.format(t.link / t.impr) : '', p && deltaEl(t.link, p.link, v => fmtInt.format(v))],
+      ['CPC', t.link ? fmtBRL2.format(t.spend / t.link) : '—', 'por clique no link', p && deltaEl(t.link ? t.spend / t.link : null, pCpc, v => fmtBRL2.format(v), 'kpi-delta', true)],
+      ['Impressões', fmtInt.format(t.impr), t.impr ? 'CPM ' + fmtBRL2.format(t.spend / t.impr * 1000) : '', p && deltaEl(t.impr, p.impr, v => fmtInt.format(v))],
     ];
     const k = $('m-kpis'); k.replaceChildren();
-    for (const [label, value, sub] of tiles) { const c = el('div', 'kpi'); c.append(el('div', 'eyebrow', label), el('div', 'kpi-value num', value), el('div', 'kpi-sub', sub)); k.appendChild(c); }
+    for (const [label, value, sub, delta] of tiles) { const c = el('div', 'kpi'); c.append(el('div', 'eyebrow', label), el('div', 'kpi-value num', value), el('div', 'kpi-sub', sub)); if (delta) c.appendChild(delta); k.appendChild(c); }
   }
 
   function renderMetaTrend() {
@@ -1698,7 +1756,7 @@ footer p { margin: 4px 0; }
   // ======================================================================
   const GD = window.GA_DATA;
   const hasGa = !!(GD && GD.daily && GD.daily.length);
-  let GF = null, GPRESETS = [], GLAST = 0, GEPOCH = null, GA = null;
+  let GF = null, GPRESETS = [], GLAST = 0, GEPOCH = null, GA = null, GPREV = null;
   const gSort = { pages: { key: 'views', dir: 'desc' }, landing: { key: 'sessions', dir: 'desc' }, products: { key: 'purchased', dir: 'desc' } };
   const gExpanded = { pages: false, landing: false, products: false };
   const gDayToDate = d => new Date(GEPOCH.getTime() + d * 864e5);
@@ -1748,10 +1806,10 @@ footer p { margin: 4px 0; }
     updateGa();
   }
 
-  function aggregateGa() {
-    const inRange = d => d >= GF.from && d <= GF.to;
+  function aggregateGa(from = GF.from, to = GF.to) {
+    const inRange = d => d >= from && d <= to;
     const tot = { sessions: 0, users: 0, newUsers: 0, engaged: 0, engSec: 0, views: 0, carts: 0, checkouts: 0, purch: 0, rev: 0 };
-    const daily = GF.to - GF.from + 1 <= 92, buckets = new Map();
+    const daily = to - from + 1 <= 92, buckets = new Map();
     for (const r of GD.daily) {
       const d = r[0]; if (!inRange(d)) continue;
       tot.sessions += r[1]; tot.users += r[2]; tot.newUsers += r[3]; tot.engaged += r[4]; tot.engSec += r[5]; tot.views += r[6]; tot.carts += r[7]; tot.checkouts += r[8]; tot.purch += r[9]; tot.rev += r[10];
@@ -1770,6 +1828,7 @@ footer p { margin: 4px 0; }
 
   function updateGa() {
     GA = aggregateGa();
+    { const [pa, pz] = shiftSpan(GF.from, GF.to, GEPOCH, cmpUnitFor(GF.from, GF.to)); GPREV = GF.preset !== 'all' ? aggregateGa(pa, pz) : null; }
     $('g-presets').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.key === GF.preset)));
     revealPreset($('g-presets'));
     $('g-date-from').value = iso(gDayToDate(GF.from)); $('g-date-to').value = iso(gDayToDate(GF.to));
@@ -1784,18 +1843,20 @@ footer p { margin: 4px 0; }
 
   function renderGaKpis() {
     const t = GA.tot, n = GF.to - GF.from + 1;
+    const p = GPREV ? GPREV.tot : null;
+    const rate = (x, d) => (d ? x / d : null);
     const tiles = [
-      ['Sessões', fmtInt.format(t.sessions), n + ' dias · ' + fmtInt.format(Math.round(t.sessions / n)) + '/dia'],
-      ['Usuários', fmtInt.format(t.users), t.users ? fmtPct.format(t.newUsers / t.users) + ' novos · soma diária' : ''],
-      ['Visualizações de página', fmtInt.format(t.views), t.sessions ? fmtDec.format(t.views / t.sessions) + ' por sessão' : ''],
-      ['Taxa de engajamento', t.sessions ? fmtPct.format(t.engaged / t.sessions) : '—', fmtInt.format(t.engaged) + ' sessões engajadas'],
-      ['Tempo médio por sessão', t.sessions ? fmtDur(t.engSec / t.sessions) : '—', 'tempo de engajamento'],
-      ['Adições ao carrinho', fmtInt.format(t.carts), t.sessions ? fmtPct2.format(t.carts / t.sessions) + ' das sessões · ' + fmtInt.format(t.checkouts) + ' checkouts' : ''],
-      ['Compras (GA)', fmtInt.format(t.purch), t.sessions ? 'conversão ' + fmtPct2.format(t.purch / t.sessions) : ''],
-      ['Receita (GA)', fmtBRL.format(t.rev), t.purch ? 'ticket médio ' + fmtBRL2.format(t.rev / t.purch) : 'sem compras no recorte'],
+      ['Sessões', fmtInt.format(t.sessions), n + ' dias · ' + fmtInt.format(Math.round(t.sessions / n)) + '/dia', p && deltaEl(t.sessions, p.sessions, v => fmtInt.format(v))],
+      ['Usuários', fmtInt.format(t.users), t.users ? fmtPct.format(t.newUsers / t.users) + ' novos · soma diária' : '', p && deltaEl(t.users, p.users, v => fmtInt.format(v))],
+      ['Visualizações de página', fmtInt.format(t.views), t.sessions ? fmtDec.format(t.views / t.sessions) + ' por sessão' : '', p && deltaEl(t.views, p.views, v => fmtInt.format(v))],
+      ['Taxa de engajamento', t.sessions ? fmtPct.format(t.engaged / t.sessions) : '—', fmtInt.format(t.engaged) + ' sessões engajadas', p && deltaEl(rate(t.engaged, t.sessions), rate(p.engaged, p.sessions), v => fmtPct.format(v))],
+      ['Tempo médio por sessão', t.sessions ? fmtDur(t.engSec / t.sessions) : '—', 'tempo de engajamento', p && deltaEl(rate(t.engSec, t.sessions), rate(p.engSec, p.sessions), v => fmtDur(v))],
+      ['Adições ao carrinho', fmtInt.format(t.carts), t.sessions ? fmtPct2.format(t.carts / t.sessions) + ' das sessões · ' + fmtInt.format(t.checkouts) + ' checkouts' : '', p && deltaEl(t.carts, p.carts, v => fmtInt.format(v))],
+      ['Compras (GA)', fmtInt.format(t.purch), t.sessions ? 'conversão ' + fmtPct2.format(t.purch / t.sessions) : '', p && deltaEl(t.purch, p.purch, v => fmtInt.format(v))],
+      ['Receita (GA)', fmtBRL.format(t.rev), t.purch ? 'ticket médio ' + fmtBRL2.format(t.rev / t.purch) : 'sem compras no recorte', p && deltaEl(t.rev, p.rev, v => fmtBRL.format(v))],
     ];
     const k = $('g-kpis'); k.replaceChildren();
-    for (const [label, value, sub] of tiles) { const c = el('div', 'kpi'); c.append(el('div', 'eyebrow', label), el('div', 'kpi-value num', value), el('div', 'kpi-sub', sub)); k.appendChild(c); }
+    for (const [label, value, sub, delta] of tiles) { const c = el('div', 'kpi'); c.append(el('div', 'eyebrow', label), el('div', 'kpi-value num', value), el('div', 'kpi-sub', sub)); if (delta) c.appendChild(delta); k.appendChild(c); }
   }
 
   function renderGaCharts() {
