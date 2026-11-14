@@ -1,0 +1,4 @@
+{
+  "_ajuda": "Metas por canal, sem filtros (loja toda). Canais: 'Shopify' e 'Mercado Livre'. Tipo 'valor': 'anual' é o total do ano, dividido por 12; 'mensal' é um mapa mês -> valor (ex.: \"2026-10\": 150000) e tem prioridade sobre o anual. Tipo 'crescimento': 'percentual' é o aumento sobre o mesmo período do mês anterior (base 'mes') ou do ano anterior (base 'ano').",
+  "canais": {}
+}
